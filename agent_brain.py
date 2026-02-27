@@ -277,32 +277,32 @@ _auto_watch_active = False
 _auto_watch_lock = threading.Lock()
 
 # 감시할 아이콘 목록: (아이콘이름, 표시라벨, confidence)
-# ⚠️ proceed는 비활성(grey) 상태를 무시하기 위해 confidence 높게 설정
+# ⚠️ proceed는 비활성(grey) 상태를 무시하기 위해 confidence 매우 높게 설정
 AUTO_ICONS = [
     ("accept_all",  "✅ Accept all",   0.8),
-    ("proceed",     "➡️ Proceed",      0.92),
+    ("proceed",     "➡️ Proceed",      0.95),
     ("run",         "▶️ Run",          0.8),
     ("scrolldown",  "🔽 Scroll Down",   0.8),
 ]
 
 def auto_watcher_loop():
-    """0.5초마다 아이콘을 스캔하여 발견시 자동 클릭"""
+    """3초마다 아이콘 스캔 + 마우스 휠 스크롤 다운"""
     global _auto_watch_active
-    COOLDOWN = 2.0  # 같은 아이콘 재클릭 방지 (ms)
+    COOLDOWN = 5.0  # 같은 아이콘 재클릭 방지 (초)
     last_click: dict = {}  # icon_name -> last click timestamp
 
     while True:
         with _auto_watch_lock:
             active = _auto_watch_active
         if not active:
-            time.sleep(0.5)
+            time.sleep(1)
             continue
 
+        # A. 아이콘 감시 & 클릭
         for icon_name, label, conf in AUTO_ICONS:
             icon_path = os.path.join(ICON_DIR, f"icon_{icon_name}.png")
             if not os.path.exists(icon_path):
                 continue
-            # 쿜다운 체크
             now = time.time()
             if now - last_click.get(icon_name, 0) < COOLDOWN:
                 continue
@@ -313,11 +313,24 @@ def auto_watcher_loop():
                     pyautogui.click()
                     last_click[icon_name] = time.time()
                     push_msg(f"🤖 [Auto] {label} 자동 클릭")
-                    time.sleep(0.3)  # 클릭 후 잠시 대기
+                    time.sleep(0.3)
             except Exception:
                 pass
 
-        time.sleep(0.5)
+        # B. 마우스 휠 스크롤 다운 (채팅 따라가기)
+        try:
+            hwnd, rect, _ = get_vscode_window_rect()
+            if rect:
+                l, t, r, b = rect
+                w, h = r - l, b - t
+                sx = int(l + w * 0.85)
+                sy = int(t + h * 0.5)
+                pyautogui.moveTo(sx, sy)
+                pyautogui.scroll(-3)  # 아래로 살짝 스크롤
+        except Exception:
+            pass
+
+        time.sleep(3)  # 3초 간격
 
 if __name__ == "__main__":
     threading.Thread(target=inbound_loop, daemon=True).start()
