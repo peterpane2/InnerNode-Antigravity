@@ -153,7 +153,9 @@ def execute_brain_task(command: str) -> bool:
 
     # 1. 시스템 명령어 처리 (매크로)
     if command.startswith("__COMMAND:"):
-        parts = command.split(":")
+        # 끝의 __ 제거: __COMMAND:AUTO_WATCH_ON__ -> __COMMAND:AUTO_WATCH_ON
+        clean_command = command.rstrip("_")
+        parts = clean_command.split(":")
         cmd_type = parts[1]
         
         if cmd_type == "SCROLL":
@@ -200,11 +202,12 @@ def execute_brain_task(command: str) -> bool:
             return found
 
         elif cmd_type == "ICON_TYPE":
-            # Review Changes 창 입력 (나머지 parts를 text로 재조합)
-            text = ":".join(parts[2:]) if len(parts) > 2 else ""
+            # Review Changes 창 입력 (나머지 parts를 text로 재조합, 끝 __ 제거)
+            text = ":".join(parts[2:]).rstrip("_") if len(parts) > 2 else ""
             if not text:
                 push_msg("❌ ICON_TYPE 명령에 텍스트가 없습니다.")
                 return False
+            push_msg(f"🔍 입력 타격: '{text[:30]}'")  # 디버그
             return type_into_chatwindow(text)
 
         elif cmd_type == "AUTO_WATCH_ON":
