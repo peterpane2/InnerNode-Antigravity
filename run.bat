@@ -6,6 +6,12 @@ echo ===================================================
 echo   🚀 Antigravity Telegram 봇 + 자동승인 시스템
 echo ===================================================
 
+:: 0. 기존 프로세스 정리 (중복 실행 방지)
+echo [*] 기존 프로세스 정리 중...
+taskkill /f /im python.exe /fi "WINDOWTITLE eq Antigravity*" > nul 2>&1
+:: 세밀하게 우리 스크립트만 골라 끄기 (PowerShell 이용)
+powershell -Command "Get-Process python -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*antigravity_bot.py*' -or $_.CommandLine -like '*agent_brain.py*' -or $_.CommandLine -like '*auto_approver.py*' } | Stop-Process -Force" > nul 2>&1
+
 :: 1. 가상환경 생성 (최초 1회)
 if not exist .venv (
     echo [1/4] 가상환경 생성 중...
