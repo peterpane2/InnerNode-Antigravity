@@ -334,7 +334,7 @@ OCR_BLACKLIST = [
 ]
 
 def clean_ocr_text(text):
-    """OCR 엔진이 자주 틀리는 한국어/영어 패턴 지능형 교정"""
+    """OCR 엔진이 자주 틀리는 한국어/영어 패턴 지능형 교정 (데이터 기반)"""
     corrections = {
         "I니다": "합니다", "습I니다": "습니다", "I니": "하니", "I다": "하다",
         "인스템스": "인스턴스", "붓이": "봇이", "리모건": "리모컨", "캠처": "캡처",
@@ -342,14 +342,15 @@ def clean_ocr_text(text):
         "성올": "성을", "중은": "좋은", "활성화면": "할 수 있게", "루프과부": "루프 과부",
         "하서도": "하셔도", "I니다!": "합니다!", "I니다.": "합니다.", "I니다?": "합니다?",
         "시I": "사용자", "시의": "사용자의", "입에서": "앱에서", "젊습니다": "졌습니다",
-        "나p": "up", "로그록": "로그를", "리포트록": "리포트가"
+        "나p": "up", "로그록": "로그를", "리포트록": "리포트가", "Antigrav": "Antigravity",
+        "Objec": "Object", "Intjg": "Antig", "lntegration": "Integration"
     }
     for wrong, right in corrections.items():
         text = text.replace(wrong, right)
     return text
 
 def get_local_ocr(img_pil):
-    """안정적인 1.5배 확대 + 대비 최적화 + 지능형 교정이 적용된 OCR"""
+    """2.0x 정밀 스케일링 + 지능형 교정 기반의 최적화된 OCR"""
     global _ocr_reader
     try:
         import easyocr
@@ -357,25 +358,22 @@ def get_local_ocr(img_pil):
             if _ocr_reader is None:
                 _ocr_reader = easyocr.Reader(['ko', 'en'])
         
-        # 1. 이미지 전처리: 1.5배 확대 및 선명도 최적화
-        # 이진화(Binarization) 대신 고품질 확대와 그레이스케일만 사용 (노즈 최소화)
+        # 튜닝 결과(ocr_tuner.py)에 따라 2.0배 확대가 가장 신뢰도가 높음
         w, h = img_pil.size
-        img_resized = img_pil.resize((int(w * 1.5), int(h * 1.5)), Image.Resampling.LANCZOS)
-        img_np = np.array(img_resized.convert('L')) # 그레이스케일
+        img_resized = img_pil.resize((int(w * 2.0), int(h * 2.0)), Image.Resampling.LANCZOS)
+        img_np = np.array(img_resized.convert('L'))
         
-        # 2. OCR 판독
+        # OCR 판독
         results = _ocr_reader.readtext(img_np, detail=1, paragraph=False)
         
         if not results: return ""
         
-        # 3. 유효한 텍스트 필터링
+        # 유효한 텍스트 필터링
         valid_blocks = []
         for (bbox, text, conf) in results:
             text = text.strip()
-            # 너무 낮은 신뢰도나 짧은 노이즈 거름
             if len(text) < 1 or conf < 0.20: continue
             
-            # 블랙리스트 필터링
             if any(bl.lower() in text.lower() for bl in OCR_BLACKLIST): continue
             
             y_top = bbox[0][1]
@@ -384,16 +382,14 @@ def get_local_ocr(img_pil):
             
         if not valid_blocks: return ""
         
-        # 4. 스마트 문장 병합 (Y좌표 기반)
+        # 스마트 문장 병합 (2.0배 확대에 맞춰 임계값 30px로 상향)
         valid_blocks.sort(key=lambda b: b['y'])
         
         lines = []
         if valid_blocks:
             current_line = valid_blocks[0]['text']
             last_y = valid_blocks[0]['y']
-            
-            # 1.5배 확대 기준 줄바뀜 임계값 (약 22px)
-            threshold = 22
+            threshold = 30
             
             for i in range(1, len(valid_blocks)):
                 block = valid_blocks[i]
@@ -405,7 +401,6 @@ def get_local_ocr(img_pil):
                 last_y = block['y']
             lines.append(current_line)
         
-        # 5. 전문 합치기 및 지능형 오타 교정
         full_text = "\n".join(lines)
         corrected_text = clean_ocr_text(full_text)
         
