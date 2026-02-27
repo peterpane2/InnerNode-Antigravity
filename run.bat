@@ -13,9 +13,9 @@ if not exist .venv (
 )
 call .venv\Scripts\activate
 
-:: 2. 패키지 설치
-echo [2/4] 필수 패키지 설치 중...
-pip install -r requirements.txt > nul 2>&1
+:: 2. 패키지 설치 (출력 표시 — 첫 실행 시 opencv 등 시간 소요)
+echo [2/4] 필수 패키지 확인 중... (첫 실행 시 1~2분 걸림)
+pip install -q -r requirements.txt
 
 :: 3. .env 파일 확인
 if not exist .env (
@@ -33,14 +33,14 @@ if not exist .env (
 
 :: 4. 자동 승인 시스템 (백그라운드)
 echo [3/4] 자동 승인 시스템 가동...
-start /b python auto_approver.py
+start "" /b python auto_approver.py
 
 :: 5. Telegram 봇 (백그라운드)
 echo [4/4] Telegram 봇 시작...
-start /b python antigravity_bot.py
+start "" /b python antigravity_bot.py
 
 :: 잠시 대기 후 Brain 시작
-timeout /t 2 > nul
+timeout /t 3 > nul
 
 :: 6. Brain 브릿지 (포그라운드 — 종료 시 전체 종료)
 echo.
