@@ -387,7 +387,8 @@ def get_local_ocr(img_pil):
         
         # 전문 합치기
         full_text = "\n".join(lines)
-        return f"\n\n📖 **Full Text OCR:**\n{full_text.strip()[:1500]}" # 전문이므로 길게 허용
+        # 텔레그램 캡션 제한(1024자)을 고려하여 OCR 본문은 900자로 제한
+        return f"\n\n📖 **Full Text OCR:**\n{full_text.strip()[:900]}" 
     except Exception as e:
         return f"\n\n⚠️ OCR 오류: {str(e)}"
 
@@ -420,7 +421,6 @@ def send_chat_snapshot(caption="📊 [Auto] 변화 감지"):
         debug_path = os.path.join(debug_dir, "last_capture.png")
         shot.save(debug_path)
 
-        # 가공되지 않은 캡처본 전체를 OCR로 전달
         ocr_text = get_gemini_ocr(shot)
         
         # 디버그 정보 추가 (캡처 영역 좌표)
@@ -429,6 +429,10 @@ def send_chat_snapshot(caption="📊 [Auto] 변화 감지"):
             debug_info = f"\n\n📐 **Capture Region:**\n`X:{chat_x}, Y:{chat_y}, W:{chat_w}, H:{chat_h}`"
         
         full_caption = f"{caption}{debug_info}{ocr_text}"
+        
+        # 텔레그램 캡션 제한(1024자) 체크 및 조정
+        if len(full_caption) > 1020:
+            full_caption = full_caption[:1017] + "..."
 
         reply_markup = {
             "inline_keyboard": [
@@ -449,8 +453,10 @@ def send_chat_snapshot(caption="📊 [Auto] 변화 감지"):
         buf = BytesIO()
         shot.save(buf, format="PNG")
         buf.seek(0)
-        requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto", 
-                      files={'photo': buf}, 
+        
+        # 1. 사진 먼저 전송
+        resp = requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto", 
+                      files={'photo': ( 'chat.png', buf, 'image/png')}, 
                       data={
                           'chat_id': int(CHAT_ID), 
                           'caption': full_caption,
@@ -458,8 +464,30 @@ def send_chat_snapshot(caption="📊 [Auto] 변화 감지"):
                           'parse_mode': 'Markdown'
                       }, 
                       timeout=15)
+        
+        # 2. 만약 캡션이 너무 길거나 마크다운 오류로 실패하면 사진만이라도 다시 보냄
+        if resp.status_code != 200:
+            buf.seek(0)
+            requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto", 
+                      files={'photo': ( 'chat.png', buf, 'image/png')}, 
+                      data={
+                          'chat_id': int(CHAT_ID), 
+                          'caption': f"{caption} (OCR 전송 실패 - 텍스트가 너무 길거나 형식이 맞지 않음)",
+                          'reply_markup': json.dumps(reply_markup)
+                      }, 
+                      timeout=15)
+            
+            # 실패한 OCR 텍스트는 일반 메시지로 따로 전송
+            requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+                        data={
+                            'chat_id': int(CHAT_ID),
+                            'text': f"📝 **상세 OCR 본문:**\n{ocr_text}"
+                        }, timeout=15)
+
         return shot
-    except: return None
+    except Exception as e: 
+        print(f"Error in send_chat_snapshot: {e}")
+        return None
 
 def auto_watcher_loop():
     """7초마다 감시, 변화 감지 시 즉시 스냅샷(버튼 포함) 전송"""
