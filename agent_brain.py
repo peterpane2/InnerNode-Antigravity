@@ -411,7 +411,7 @@ def auto_watcher_loop():
         try:
             sx, sy = int(l + w * 0.85), int(t + h * 0.5)
             pyautogui.moveTo(sx, sy)
-            pyautogui.scroll(-15)  # 훨씬 더 많이 아래로 스크롤
+            pyautogui.scroll(-50)  # 훨씬 더 많이 아래로 스크롤
         except: pass
 
         time.sleep(7)
