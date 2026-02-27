@@ -462,20 +462,31 @@ def send_chat_snapshot(caption="📊 [Auto] 변화 감지"):
                       timeout=15)
         
         # 2. OCR 리포트 별도 전송 (독립된 텍스트 메시지)
-        if ocr_text:
-            requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+        if ocr_text and len(ocr_text.strip()) > 0:
+            print(f"[*] Sending OCR report ({len(ocr_text)} chars)...")
+            # MarkdownV2 대신 일반 Markdown을 쓰되, 특수문자 충돌 방지를 위해 실패 시 일반 텍스트로 재시도
+            msg_res = requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
                         data={
                             'chat_id': int(CHAT_ID),
                             'text': ocr_text,
                             'parse_mode': 'Markdown'
                         }, timeout=15)
+            
+            if msg_res.status_code != 200:
+                print(f"[!] Markdown OCR delivery failed ({msg_res.status_code}), retrying as plain text...")
+                requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+                            data={
+                                'chat_id': int(CHAT_ID),
+                                'text': ocr_text
+                            }, timeout=15)
+        else:
+            print("[!] OCR text is empty, skipping message.")
 
         return shot
     except Exception as e: 
         print(f"Error in send_chat_snapshot: {e}")
-        return None
-    except Exception as e: 
-        print(f"Error in send_chat_snapshot: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 def auto_watcher_loop():
