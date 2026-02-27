@@ -17,7 +17,7 @@ import win32con
 from io import BytesIO
 from dotenv import load_dotenv
 
-from telegram import Update
+from telegram import Update, BotCommand
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -368,7 +368,25 @@ def main() -> None:
     watcher = threading.Thread(target=outbound_watcher, args=(BOT_TOKEN, CHAT_ID), daemon=True)
     watcher.start()
 
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    async def post_init(application):
+        commands = [
+            BotCommand("auto", "🤖 자동 승인 시작 (아이콘+색상+스크롤+스냅샷)"),
+            BotCommand("autooff", "⏹️ 자동 승인 중단"),
+            BotCommand("chat", "📸 원격 대화창 스냅샷"),
+            BotCommand("type", "✍️ 텍스트 입력 및 전송 (사용법: /type 메시지)"),
+            BotCommand("accept", "✅ Accept All 클릭"),
+            BotCommand("proceed", "➡️ Proceed 클릭"),
+            BotCommand("run", "▶️ Terminal Run 클릭"),
+            BotCommand("stop_agent", "🛑 에이전트 중지 클릭"),
+            BotCommand("scrolldown", "🔽 하단 화살표 클릭"),
+            BotCommand("screenshot", "🖥️ 전체 화면 캡처"),
+            BotCommand("history", "📖 최근 대화 로그 추출"),
+            BotCommand("status", "📊 시스템 상태 체크"),
+            BotCommand("stop", "🚨 긴급 중지 (Durable Object)"),
+        ]
+        await application.bot.set_my_commands(commands)
+
+    app = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("screenshot", cmd_screenshot))
     app.add_handler(CommandHandler("chat", cmd_chat))
