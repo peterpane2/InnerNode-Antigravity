@@ -333,34 +333,57 @@ OCR_BLACKLIST = [
     "Running background command", "Relocate", "Cancel", "Good", "Bad", "Always run"
 ]
 
+def clean_ocr_text(text):
+    """OCR 엔진이 자주 틀리는 한국어/영어 패턴 지능형 교정"""
+    corrections = {
+        "I니다": "합니다", "습I니다": "습니다", "I니": "하니", "I다": "하다",
+        "인스템스": "인스턴스", "붓이": "봇이", "리모건": "리모컨", "캠처": "캡처",
+        "전승": "전송", "kil": "kill", "인스템": "인스턴", "충들": "충돌",
+        "성올": "성을", "중은": "좋은", "활성화면": "할 수 있게", "루프과부": "루프 과부",
+        "하서도": "하셔도", "I니다!": "합니다!", "I니다.": "합니다.", "I니다?": "합니다?",
+        "시I": "사용자", "시의": "사용자의", "입에서": "앱에서", "젊습니다": "졌습니다",
+        "나p": "up", "로그록": "로그를", "리포트록": "리포트가"
+    }
+    for wrong, right in corrections.items():
+        text = text.replace(wrong, right)
+    return text
+
 def get_local_ocr(img_pil):
-    """이미지 전처리(배율 확대 + 그레이스케일) 후 OCR 판독률 개선 버전"""
+    """지능형 이진화 + 후정정 + 멀티스케일 분석이 적용된 고성능 OCR"""
     global _ocr_reader
     try:
         import easyocr
+        import cv2
         with _ocr_lock:
             if _ocr_reader is None:
                 _ocr_reader = easyocr.Reader(['ko', 'en'])
         
-        # 1. 이미지 전처리: 판독률 향상을 위해 1.5배 확대 및 그레이스케일 변환
-        w, h = img_pil.size
-        # 너무 작으면 판독이 어려우므로 확대 (1.5배가 적당함)
-        img_pre = img_pil.resize((int(w * 1.5), int(h * 1.5)), Image.Resampling.LANCZOS)
-        img_np = np.array(img_pre.convert('L')) # 그레이스케일로 대비 강조
-        
-        # 2. OCR 판독 (파라미터 튜닝)
-        # contrast_ths: 대비 임계값, low_text: 낮은 텍스트 감지 수준
+        # 1. 이미지 전처리 (기본 1.5배 확대)
+        def preprocess(img, scale):
+            w, h = img.size
+            img_resized = img.resize((int(w * scale), int(h * scale)), Image.Resampling.LANCZOS)
+            gray = np.array(img_resized.convert('L'))
+            # 적응형 이진화 (Adaptive Thresholding)로 글자 윤곽 극대화
+            binarized = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+            return binarized, scale
+
+        # 메인 분석 (1.5배)
+        img_np, current_scale = preprocess(img_pil, 1.5)
         results = _ocr_reader.readtext(img_np, detail=1, contrast_ths=0.1, low_text=0.3)
         
+        # 만약 결과가 너무 적으면 1.2배로 재시도 (멀티스케일 폴백)
+        if len(results) < 3:
+            img_np, current_scale = preprocess(img_pil, 1.2)
+            results = _ocr_reader.readtext(img_np, detail=1)
+
         if not results: return ""
         
-        # 3. 유효한 텍스트 필터링
+        # 2. 유효한 텍스트 필터링
         valid_blocks = []
         for (bbox, text, conf) in results:
             text = text.strip()
-            if len(text) < 1 or conf < 0.15: continue # 아주 낮은 신뢰도만 거름
+            if len(text) < 1 or conf < 0.15: continue
             
-            # 블랙리스트 필터링
             if any(bl.lower() in text.lower() for bl in OCR_BLACKLIST): continue
             
             y_top = bbox[0][1]
@@ -369,7 +392,7 @@ def get_local_ocr(img_pil):
             
         if not valid_blocks: return ""
         
-        # 4. 스마트 문장 병합 (1.5배 확대했으므로 Y좌표 간격 기준도 조정)
+        # 3. 스마트 문장 병합 (스케일 반영)
         valid_blocks.sort(key=lambda b: b['y'])
         
         lines = []
@@ -377,10 +400,12 @@ def get_local_ocr(img_pil):
             current_line = valid_blocks[0]['text']
             last_y = valid_blocks[0]['y']
             
+            # 스케일에 따른 줄 바꿈 임계값 (1.5배면 25px, 1.2배면 20px)
+            threshold = 25 * (current_scale / 1.5)
+            
             for i in range(1, len(valid_blocks)):
                 block = valid_blocks[i]
-                # 확대 기준(1.5배)으로 줄 바뀜 임계값 조정 (약 25px)
-                if block['y'] - last_y > 25: 
+                if block['y'] - last_y > threshold: 
                     lines.append(current_line)
                     current_line = block['text']
                 else:
@@ -388,8 +413,11 @@ def get_local_ocr(img_pil):
                 last_y = block['y']
             lines.append(current_line)
         
+        # 4. 전문 합치기 및 지능형 오타 교정
         full_text = "\n".join(lines)
-        return f"📖 **Full Text OCR 전문:**\n\n{full_text.strip()[:2000]}" 
+        corrected_text = clean_ocr_text(full_text)
+        
+        return f"📖 **Full Text OCR 전문 (AI 교정):**\n\n{corrected_text.strip()[:2000]}" 
     except Exception as e:
         return f"⚠️ OCR 오류 발생: {str(e)}"
 
