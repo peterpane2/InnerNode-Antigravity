@@ -37,9 +37,9 @@ if not exist .env (
     exit /b 1
 )
 
-:: 4. 자동 승인 시스템 (백그라운드)
-echo [3/4] 자동 승인 시스템 가동...
-start "" /b python auto_approver.py
+:: 4. 자동 승인 시스템 (Brain 통합)
+echo [3/4] 자동 승인 준비 완료...
+:: start "" /b python auto_approver.py  <-- Brain으로 통합됨
 
 :: 5. Telegram 봇 (백그라운드)
 echo [4/4] Telegram 봇 시작...

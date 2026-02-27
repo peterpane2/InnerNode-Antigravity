@@ -7,9 +7,15 @@ agent_brain.py — 브릿지 에이전트 (v3.4)
 """
 import os, json, time, threading, tempfile, ctypes, requests
 import pyautogui, pyperclip, win32gui, win32con
+import numpy as np
 from PIL import Image
 from io import BytesIO
 from dotenv import load_dotenv
+
+try:
+    from scipy import ndimage
+except ImportError:
+    ndimage = None
 
 # 🛠️ 디버그 설정: 클릭 지점을 사진으로 확인하고 싶을 때만 True로 변경하세요.
 DEBUG_IMAGE = False
@@ -287,11 +293,34 @@ AUTO_ICONS = [
     ("scrolldown",  "🔽 Scroll Down",   0.8),
 ]
 
+def find_color_buttons(img_pil):
+    """auto_approver.py에서 가져온 색상 기반 버튼 감지 로직"""
+    if ndimage is None: return []
+    try:
+        img = np.array(img_pil)
+        R, G, B = img[:, :, 0], img[:, :, 1], img[:, :, 2]
+        mask_blue = (B > 130) & (B > R * 1.5) & (B > G * 1.1)
+        mask_green = (G > 130) & (G > R * 1.2)
+        mask_combined = mask_blue | mask_green
+        labeled, _ = ndimage.label(mask_combined)
+        objects = ndimage.find_objects(labeled)
+        buttons = []
+        for i, slices in enumerate(objects):
+            if slices is None: continue
+            sy, sx = slices
+            h, w = sy.stop - sy.start, sx.stop - sx.start
+            area = np.sum(labeled[slices] == (i + 1))
+            if w < 40 or h < 20 or w > 350 or h > 80: continue
+            if area < 350 or (w/h) < 1.1 or (w/h) > 7.0: continue
+            buttons.append({"x": sx.start + w // 2, "y": sy.start + h // 2})
+        return buttons
+    except Exception: return []
+
 def auto_watcher_loop():
-    """3초마다 아이콘 스캔 + 마우스 휠 스크롤 다운"""
+    """3초마다 아이콘 스캔 + 색상 버튼 감지 + 마우스 휠 스크롤 다운"""
     global _auto_watch_active
-    COOLDOWN = 5.0  # 같은 아이콘 재클릭 방지 (초)
-    last_click: dict = {}  # icon_name -> last click timestamp
+    COOLDOWN = 5.0 
+    last_click: dict = {}
 
     while True:
         with _auto_watch_lock:
@@ -300,14 +329,20 @@ def auto_watcher_loop():
             time.sleep(1)
             continue
 
-        # A. 아이콘 감시 & 클릭
+        hwnd, rect, _ = get_vscode_window_rect()
+        if not rect:
+            time.sleep(3)
+            continue
+        
+        l, t, r, b = rect
+        w, h = r - l, b - t
+
+        # A. 아이콘 감시 (모양 인식)
         for icon_name, label, conf in AUTO_ICONS:
             icon_path = os.path.join(ICON_DIR, f"icon_{icon_name}.png")
-            if not os.path.exists(icon_path):
-                continue
+            if not os.path.exists(icon_path): continue
             now = time.time()
-            if now - last_click.get(icon_name, 0) < COOLDOWN:
-                continue
+            if now - last_click.get(icon_name, 0) < COOLDOWN: continue
             try:
                 pos = pyautogui.locateCenterOnScreen(icon_path, confidence=conf)
                 if pos:
@@ -316,28 +351,40 @@ def auto_watcher_loop():
                     last_click[icon_name] = time.time()
                     push_msg(f"🤖 [Auto] {label} 자동 클릭")
                     time.sleep(0.3)
-            except Exception:
-                pass
+            except: pass
 
-        # B. 마우스 휠 스크롤 다운 (채팅 따라가기)
+        # B. 색상 기반 승인 버튼 감지 (Approver 통합)
         try:
-            hwnd, rect, _ = get_vscode_window_rect()
-            if rect:
-                l, t, r, b = rect
-                w, h = r - l, b - t
-                sx = int(l + w * 0.85)
-                sy = int(t + h * 0.5)
-                pyautogui.moveTo(sx, sy)
-                pyautogui.scroll(-3)  # 아래로 살짝 스크롤
-        except Exception:
-            pass
+            # VS Code 영역 캡처 (상단 메뉴/하단 상태줄 제외한 중앙 위주)
+            zone_l, zone_t = max(0, l + int(w*0.15)), max(0, t + 40)
+            zone_w, zone_h = min(int(w*0.8), pyautogui.size()[0]-zone_l), min(h-100, pyautogui.size()[1]-zone_t)
+            if zone_w > 0 and zone_h > 0:
+                shot = pyautogui.screenshot(region=(zone_l, zone_t, zone_w, zone_h))
+                c_btns = find_color_buttons(shot)
+                if c_btns:
+                    # 상단 35%에 버튼 있으면 그것 우선 (Run/Allow 등)
+                    top_b = [btn for btn in c_btns if btn["y"] < zone_h * 0.35]
+                    target = top_b[0] if top_b else sorted(c_btns, key=lambda b: b["y"], reverse=True)[0]
+                    rx, ry = zone_l + target["x"], zone_t + target["y"]
+                    pyautogui.moveTo(rx, ry, duration=0.15)
+                    pyautogui.click()
+                    push_msg("🤖 [Auto] 색상 감지 승인 버튼 클릭")
+                    time.sleep(0.3)
+        except: pass
 
-        time.sleep(3)  # 3초 간격
+        # C. 마우스 휠 스크롤 다운 (채팅 따라가기)
+        try:
+            sx, sy = int(l + w * 0.85), int(t + h * 0.5)
+            pyautogui.moveTo(sx, sy)
+            pyautogui.scroll(-3)
+        except: pass
+
+        time.sleep(3)
 
 if __name__ == "__main__":
     threading.Thread(target=inbound_loop, daemon=True).start()
     threading.Thread(target=auto_watcher_loop, daemon=True).start()
-    print("🤖 Auto Watcher 스레드 대기 중 (/auto 명령으로 활성화)")
+    print("🤖 Auto Watcher (아이콘+색상) 스레드 대기 중 (/auto 명령으로 활성화)")
     try:
         while True: time.sleep(1)
     except KeyboardInterrupt: pass
