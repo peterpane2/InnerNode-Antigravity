@@ -114,12 +114,12 @@ def type_into_chatwindow(text: str) -> bool:
         panel_box = None
 
     if panel_box:
-        # 패널의 바운딩 박스 기준으로 "Review Changes ~ 마이크" 중간 위치 계산
-        # left, top, width, height
-        px = panel_box.left + panel_box.width // 2        # 가로 중앙
-        py = panel_box.top + int(panel_box.height * 0.70) # 높이의 70% = 입력창 위치
+        # "Review Changes" 문구의 R 글자 바로 아래 = 입력창 시작점
+        px = panel_box.left + int(panel_box.width * 0.15)   # 왼쪽 15% (R 글자 아래)
+        py = panel_box.top + int(panel_box.height * 0.35)    # 높이 35% (헤더 바로 아래)
         pyautogui.moveTo(px, py, duration=0.2)
         pyautogui.click()
+        time.sleep(0.1)
         pyautogui.click()  # 더블클릭으로 포커스 확실히 확보
     else:
         push_msg("⚠️ Review Changes 창을 찾지 못했습니다. 창이 열려 있는지 확인하세요.")
