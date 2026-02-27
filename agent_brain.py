@@ -322,35 +322,90 @@ def find_color_buttons(img_pil):
         return buttons
     except Exception: return []
 
-def send_chat_snapshot():
-    """채팅 영역 스냅샷을 찍어 텔레그램으로 전송 (아이콘 명령 없이도 작동)
-    /chat 명령어와 동일한 영역(오른쪽 35%)을 사용합니다."""
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+def get_gemini_ocr(img_pil):
+    """Gemini 1.5 Flash를 사용하여 채팅창의 마지막 메시지를 텍스트로 추출"""
+    if not GEMINI_API_KEY: return ""
+    try:
+        import base64
+        buf = BytesIO()
+        img_pil.save(buf, format="JPEG", quality=80)
+        img_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+        
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+        payload = {
+            "contents": [{
+                "parts": [
+                    {"text": "Extract the very last coding assistant message from this screenshot. Be concise and return only the text of the message."},
+                    {"inline_data": {"mime_type": "image/jpeg", "data": img_b64}}
+                ]
+            }]
+        }
+        res = requests.post(url, json=payload, timeout=10)
+        data = res.json()
+        text = data['candidates'][0]['content']['parts'][0]['text']
+        return f"\n\n📝 **AI 내용 요약:**\n{text.strip()[:300]}"
+    except: return ""
+
+def send_chat_snapshot(caption="📊 [Auto] 변화 감지"):
+    """채팅 영역 스냅샷 + OCR 요약 + 리모컨 인라인 버튼 전송"""
     hwnd, rect, _ = get_vscode_window_rect()
     if not rect: return
     l, t, r, b = rect
     w, h = r - l, b - t
-    
-    # /chat 명령어와 동일한 영역 설정
     chat_x = int(l + w * 0.65)
     chat_w = int(w * 0.35)
     
     try:
         shot = pyautogui.screenshot(region=(chat_x, t, chat_w, h))
+        
+        # OCR 시도 (Gemini API 필요)
+        ocr_text = get_gemini_ocr(shot)
+        full_caption = f"{caption}{ocr_text}"
+
+        # 텔레그램 인라인 버튼 설정
+        reply_markup = {
+            "inline_keyboard": [
+                [
+                    {"text": "✅ Accept All", "callback_data": "btn_accept"},
+                    {"text": "➡️ Proceed", "callback_data": "btn_proceed"}
+                ],
+                [
+                    {"text": "▶️ Run", "callback_data": "btn_run"},
+                    {"text": "🛑 Stop", "callback_data": "btn_stop_agent"}
+                ],
+                [
+                    {"text": "📸 Refresh", "callback_data": "btn_chat_refresh"}
+                ]
+            ]
+        }
+
         buf = BytesIO()
         shot.save(buf, format="PNG")
         buf.seek(0)
         requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto", 
                       files={'photo': buf}, 
-                      data={'chat_id': int(CHAT_ID), 'caption': "📊 [Auto] 현재 대화창 상황"}, 
+                      data={
+                          'chat_id': int(CHAT_ID), 
+                          'caption': full_caption,
+                          'reply_markup': json.dumps(reply_markup),
+                          'parse_mode': 'Markdown'
+                      }, 
                       timeout=15)
-    except: pass
+        return shot
+    except: return None
 
 def auto_watcher_loop():
-    """7초마다 스캔/스크롤, 1분마다 채팅 스냅샷 전송"""
+    """7초마다 감시, 변화 감지 시 즉시 스냅샷(버튼 포함) 전송"""
     global _auto_watch_active
     COOLDOWN = 5.0 
     last_click: dict = {}
-    last_snapshot = 0
+    
+    # 변화 감지용 변수
+    prev_chat_thumb = None
+    last_change_time = 0
+    change_notified = True
 
     while True:
         with _auto_watch_lock:
@@ -383,15 +438,31 @@ def auto_watcher_loop():
                     time.sleep(0.3)
             except: pass
 
-        # B. 채팅 스냅샷 전송 (매 60초)
-        now = time.time()
-        if now - last_snapshot >= 60:
-            send_chat_snapshot()
-            last_snapshot = now
+        # B. 스마트 변화 감지 (새 메시지 알림)
+        try:
+            chat_x, chat_w = int(l + w * 0.65), int(w * 0.35)
+            # 아주 작은 썸네일로 비교 (속도/메모리 절약)
+            current_chat = pyautogui.screenshot(region=(chat_x, t, chat_w, h))
+            curr_thumb = np.array(current_chat.resize((50, 100)).convert('L'))
+            
+            if prev_chat_thumb is not None:
+                diff = np.mean(np.abs(curr_thumb.astype(float) - prev_chat_thumb.astype(float)))
+                # 차이가 일정 수준(배경 노이즈 이상)이면 변화로 간주
+                if diff > 1.5: 
+                    last_change_time = time.time()
+                    change_notified = False
+                
+                # 변화가 멈춘 지 3초가 지났고 아직 알림 전이라면 전송
+                if not change_notified and (time.time() - last_change_time > 3.0):
+                    send_chat_snapshot("🔔 [Auto] AI가 새로운 내용을 작성했습니다.")
+                    change_notified = True
+            
+            prev_chat_thumb = curr_thumb
+        except: pass
 
         # C. 색상 기반 승인 버튼 감지 (Approver 통합)
         try:
-            # VS Code 영역 캡처 (에디터 왼쪽 40%를 건너뜀으로써 오작동 방지)
+            # VS Code 영역 캡처 (에디터 왼쪽 40%를 건너뜜으로써 오작동 방지)
             zone_l, zone_t = max(0, l + int(w*0.40)), max(0, t + 40)
             zone_w, zone_h = min(int(w*0.55), pyautogui.size()[0]-zone_l), min(h-100, pyautogui.size()[1]-zone_t)
             if zone_w > 0 and zone_h > 0:
@@ -411,7 +482,7 @@ def auto_watcher_loop():
         try:
             sx, sy = int(l + w * 0.85), int(t + h * 0.5)
             pyautogui.moveTo(sx, sy)
-            pyautogui.scroll(-50)  # 훨씬 더 많이 아래로 스크롤
+            pyautogui.scroll(-50)
         except: pass
 
         time.sleep(7)
