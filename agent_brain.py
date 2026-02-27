@@ -499,6 +499,7 @@ def auto_watcher_loop():
     prev_chat_thumb = None
     last_change_time = 0
     change_notified = True
+    last_interval_snapshot = 0 # 1분 간격 스냅샷용
 
     while True:
         with _auto_watch_lock:
@@ -578,7 +579,13 @@ def auto_watcher_loop():
             pyautogui.scroll(-50)
         except: pass
 
-        time.sleep(7)
+        # E. 1분 간격 정기 스냅샷 (사용자 요청)
+        now = time.time()
+        if now - last_interval_snapshot > 60:
+            send_chat_snapshot("⏲️ [Auto] 1분 간격 정기 스냅샷")
+            last_interval_snapshot = now
+
+        time.sleep(1) # 루프 과부하 방지
 
 if __name__ == "__main__":
     threading.Thread(target=inbound_loop, daemon=True).start()
