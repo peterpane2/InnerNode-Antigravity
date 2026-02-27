@@ -108,14 +108,19 @@ def type_into_chatwindow(text: str) -> bool:
     # 1. chatwindow 패널 감지 (패널 중앙 어딘가 클릭 – 포커스 확보)
     icon_path = os.path.join(ICON_DIR, "icon_chatwindow.png")
     try:
-        panel_pos = pyautogui.locateCenterOnScreen(icon_path, confidence=0.75)
+        # locateCenterOnScreen 대신 locate()로 바운딩 박스 전체를 가져옵니다
+        panel_box = pyautogui.locate(icon_path, pyautogui.screenshot(), confidence=0.75)
     except Exception:
-        panel_pos = None
+        panel_box = None
 
-    if panel_pos:
-        # 패널보다 조금 아래(입력창 영역) 클릭
-        pyautogui.moveTo(panel_pos.x, panel_pos.y + 80, duration=0.2)
+    if panel_box:
+        # 패널의 바운딩 박스 기준으로 "Review Changes ~ 마이크" 중간 위치 계산
+        # left, top, width, height
+        px = panel_box.left + panel_box.width // 2        # 가로 중앙
+        py = panel_box.top + int(panel_box.height * 0.70) # 높이의 70% = 입력창 위치
+        pyautogui.moveTo(px, py, duration=0.2)
         pyautogui.click()
+        pyautogui.click()  # 더블클릭으로 포커스 확실히 확보
     else:
         push_msg("⚠️ Review Changes 창을 찾지 못했습니다. 창이 열려 있는지 확인하세요.")
         return False
