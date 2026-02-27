@@ -334,7 +334,7 @@ OCR_BLACKLIST = [
 ]
 
 def get_local_ocr(img_pil):
-    """EasyOCR을 사용하여 이미지 전체에서 텍스트 추출 및 필터링 (한/영 지원)"""
+    """EasyOCR을 사용하여 이미지 내의 모든 텍스트를 문장 끊김 없이 전문 추출 (한/영 지원)"""
     global _ocr_reader
     try:
         import easyocr
@@ -343,30 +343,51 @@ def get_local_ocr(img_pil):
                 _ocr_reader = easyocr.Reader(['ko', 'en'])
         
         img_np = np.array(img_pil)
-        results = _ocr_reader.readtext(img_np)
+        # detail=1로 설정하여 좌표값(bbox)까지 가져옴
+        results = _ocr_reader.readtext(img_np, detail=1)
         
         if not results: return ""
         
-        # 1. 지능형 필터링 및 텍스트 정제
-        filtered_lines = []
-        for res in results:
-            text = res[1].strip()
-            conf = res[2]
+        # 1. 유효한 텍스트 필터링
+        valid_blocks = []
+        for (bbox, text, conf) in results:
+            text = text.strip()
+            if len(text) < 2 or conf < 0.20: continue
             
-            # 너무 짧거나 신뢰도가 낮은 것은 무시
-            if len(text) < 2 or conf < 0.25: continue
+            # 블랙리스트 필터링
+            if any(bl.lower() in text.lower() for bl in OCR_BLACKLIST): continue
             
-            # 블랙리스트 포함 여부 체크 (대소문자 무시)
-            is_blacklisted = any(bl.lower() in text.lower() for bl in OCR_BLACKLIST)
-            if is_blacklisted: continue
+            # 블록의 상단 y좌표 기준으로 정렬하기 위해 저장
+            y_top = bbox[0][1]
+            x_left = bbox[0][0]
+            valid_blocks.append({'y': y_top, 'x': x_left, 'text': text})
             
-            filtered_lines.append(text)
+        if not valid_blocks: return ""
         
-        if not filtered_lines: return ""
+        # 2. 스마트 문장 병합 (Y좌표가 비슷하면 같은 줄로 인식, 너무 떨어져 있지 않으면 이어붙임)
+        # 우선 Y좌표 순으로 정렬
+        valid_blocks.sort(key=lambda b: b['y'])
         
-        # 최근 15줄 요약 (중요 대화 맥락 확보)
-        summary = "\n".join(filtered_lines[-15:])
-        return f"\n\n📝 **Local OCR 요약:**\n{summary.strip()[:800]}"
+        lines = []
+        if valid_blocks:
+            current_line = valid_blocks[0]['text']
+            last_y = valid_blocks[0]['y']
+            
+            for i in range(1, len(valid_blocks)):
+                block = valid_blocks[i]
+                # 줄 바뀜 판단 기준 (글자 높이의 약 절반 이상 차이나면 다음 줄)
+                if block['y'] - last_y > 15: 
+                    lines.append(current_line)
+                    current_line = block['text']
+                else:
+                    # 같은 줄이면 띄어쓰기로 이어붙임
+                    current_line += " " + block['text']
+                last_y = block['y']
+            lines.append(current_line)
+        
+        # 전문 합치기
+        full_text = "\n".join(lines)
+        return f"\n\n📖 **Full Text OCR:**\n{full_text.strip()[:1500]}" # 전문이므로 길게 허용
     except Exception as e:
         return f"\n\n⚠️ OCR 오류: {str(e)}"
 
