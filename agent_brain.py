@@ -317,17 +317,19 @@ def find_color_buttons(img_pil):
     except Exception: return []
 
 def send_chat_snapshot():
-    """채팅 영역 스냅샷을 찍어 텔레그램으로 전송 (아이콘 명령 없이도 작동)"""
+    """채팅 영역 스냅샷을 찍어 텔레그램으로 전송 (아이콘 명령 없이도 작동)
+    /chat 명령어와 동일한 영역(오른쪽 35%)을 사용합니다."""
     hwnd, rect, _ = get_vscode_window_rect()
     if not rect: return
     l, t, r, b = rect
     w, h = r - l, b - t
-    # 채팅 영역 캡처 (오른쪽 30% 영역 추정)
-    zone_l, zone_t = l + int(w * 0.7), t + 40
-    zone_w, zone_h = int(w * 0.3), h - 100
+    
+    # /chat 명령어와 동일한 영역 설정
+    chat_x = int(l + w * 0.65)
+    chat_w = int(w * 0.35)
+    
     try:
-        shot = pyautogui.screenshot(region=(zone_l, zone_t, zone_w, zone_h))
-        # push_img는 DEBUG_IMAGE가 True여야만 작동하므로, 직접 전송 로직 사용
+        shot = pyautogui.screenshot(region=(chat_x, t, chat_w, h))
         buf = BytesIO()
         shot.save(buf, format="PNG")
         buf.seek(0)
