@@ -358,7 +358,7 @@ def get_local_ocr(img_pil):
 get_gemini_ocr = get_local_ocr 
 
 def send_chat_snapshot(caption="📊 [Auto] 변화 감지"):
-    """채팅 본문만 정밀 캡처 + 리모컨 인라인 버튼 전송"""
+    """채팅 본문만 정밀 캡처 + 리모컨 인라인 버튼 전송 + 진단 정보 제공"""
     hwnd, rect, _ = get_vscode_window_rect()
     if not rect: return
     l, t, r, b = rect
@@ -378,9 +378,21 @@ def send_chat_snapshot(caption="📊 [Auto] 변화 감지"):
     try:
         shot = pyautogui.screenshot(region=(chat_x, chat_y, chat_w, chat_h))
         
+        # [DEBUG 전 전용] 로컬에 캡처본 저장하여 확인 가능케 함
+        debug_dir = os.path.join(os.getcwd(), ".debug")
+        os.makedirs(debug_dir, exist_ok=True)
+        debug_path = os.path.join(debug_dir, "last_capture.png")
+        shot.save(debug_path)
+
         # 가공되지 않은 캡처본 전체를 OCR로 전달
         ocr_text = get_gemini_ocr(shot)
-        full_caption = f"{caption}{ocr_text}"
+        
+        # 디버그 정보 추가 (캡처 영역 좌표)
+        debug_info = ""
+        if "DEBUG" in caption or "Manual" in caption:
+            debug_info = f"\n\n📐 **Capture Region:**\n`X:{chat_x}, Y:{chat_y}, W:{chat_w}, H:{chat_h}`"
+        
+        full_caption = f"{caption}{debug_info}{ocr_text}"
 
         reply_markup = {
             "inline_keyboard": [
