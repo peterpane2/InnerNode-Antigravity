@@ -333,7 +333,7 @@ OCR_BLACKLIST = [
 ]
 
 def get_local_ocr(img_pil):
-    """EasyOCR을 사용하여 채팅창 본문(상하단 제외)만 지능적으로 추출 (한/영 지원)"""
+    """EasyOCR을 사용하여 이미지 전체에서 텍스트 추출 (한/영 지원)"""
     global _ocr_reader
     try:
         import easyocr
@@ -341,68 +341,47 @@ def get_local_ocr(img_pil):
             if _ocr_reader is None:
                 _ocr_reader = easyocr.Reader(['ko', 'en'])
         
-        # 1. 상단/하단/좌측 UI 영역 제외 크롭 (OCR용)
-        # 헤더(약 60px), 하단 입력창(약 120px), 좌측 여백(약 50px)을 잘라내어 본문만 집중
-        w, h = img_pil.size
-        top_crop = 60
-        bottom_crop = 120
-        left_crop = 50
-        
-        # 크롭 영역 계산 (최소 크기 보장)
-        new_l = min(left_crop, w - 10)
-        new_t = min(top_crop, h - 10)
-        new_r = w
-        new_b = max(new_t + 10, h - bottom_crop)
-        
-        img_ocr = img_pil.crop((new_l, new_t, new_r, new_b))
-
-        img_np = np.array(img_ocr)
+        img_np = np.array(img_pil)
         results = _ocr_reader.readtext(img_np)
         
         if not results: return ""
         
-        # 2. 지능형 필터링
-        filtered_lines = []
-        for res in results:
-            text = res[1].strip()
-            conf = res[2]
-            
-            # 너무 짧거나 신뢰도가 낮은 것은 무시
-            if len(text) < 2 or conf < 0.3: continue
-            
-            # 블랙리스트 포함 여부 체크
-            is_blacklisted = any(bl.lower() in text.lower() for bl in OCR_BLACKLIST)
-            if is_blacklisted: continue
-            
-            filtered_lines.append(text)
+        # 텍스트들 합치기 (최근 위주로)
+        lines = [res[1] for res in results if res[2] > 0.3] # 신뢰도 0.3 이상만
+        if not lines: return ""
         
-        if not filtered_lines: return ""
-        
-        # 최근 10줄만 요약
-        summary = "\n".join(filtered_lines[-10:])
-        return f"\n\n📝 **Local OCR 요약:**\n{summary.strip()[:500]}"
+        summary = "\n".join(lines[-12:]) # 조금 더 넉넉하게 12줄
+        return f"\n\n📝 **Local OCR 요약:**\n{summary.strip()[:600]}"
     except Exception as e:
         return f"\n\n⚠️ OCR 오류: {str(e)}"
 
 get_gemini_ocr = get_local_ocr 
 
 def send_chat_snapshot(caption="📊 [Auto] 변화 감지"):
-    """채팅 영역 스냅샷 + OCR 요약 + 리모컨 인라인 버튼 전송"""
+    """채팅 본문만 정밀 캡처 + 리모컨 인라인 버튼 전송"""
     hwnd, rect, _ = get_vscode_window_rect()
     if not rect: return
     l, t, r, b = rect
     w, h = r - l, b - t
-    chat_x = int(l + w * 0.65)
-    chat_w = int(w * 0.35)
     
+    # 🎯 이미지 캡처 영역 정밀 조절
+    # 1. 좌측 여백 건너뛰기: 오른쪽 35% 영역 중에서도 50px 더 오른쪽에서 시작
+    chat_x = int(l + w * 0.65) + 50
+    chat_w = int(w * 0.35) - 50
+    
+    # 2. 상하단 헤더/푸터 건너뛰기
+    chat_y = t + 65 # 헤더 약 65px 무시
+    chat_h = h - 65 - 125 # 하단 입력창 약 125px 무시
+    
+    if chat_w <= 0 or chat_h <= 0: return
+
     try:
-        shot = pyautogui.screenshot(region=(chat_x, t, chat_w, h))
+        shot = pyautogui.screenshot(region=(chat_x, chat_y, chat_w, chat_h))
         
-        # OCR 시도 (Gemini API 필요)
+        # 가공되지 않은 캡처본 전체를 OCR로 전달
         ocr_text = get_gemini_ocr(shot)
         full_caption = f"{caption}{ocr_text}"
 
-        # 텔레그램 인라인 버튼 설정
         reply_markup = {
             "inline_keyboard": [
                 [
