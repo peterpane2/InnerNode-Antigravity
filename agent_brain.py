@@ -211,9 +211,10 @@ def execute_brain_task(command: str) -> bool:
             if not icon_name:
                 push_msg("❌ ICON 명령에 아이콘 이름이 없습니다.")
                 return False
-            found = click_icon(icon_name, confidence=0.8)
+            # 5초 동안 버튼이 나타날 때까지 반복 탐색 (신뢰성 상승)
+            found = click_icon(icon_name, confidence=0.8, timeout=5.0)
             if not found:
-                push_msg(f"⚠️ 화면에서 '{icon_name}' 버튼을 찾지 못했습니다.")
+                push_msg(f"⚠️ 5초 동안 기다렸지만 '{icon_name}' 버튼을 찾지 못했습니다.")
             return found
 
         elif cmd_type == "ICON_TYPE":
