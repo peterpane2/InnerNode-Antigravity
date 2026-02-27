@@ -334,7 +334,7 @@ OCR_BLACKLIST = [
 ]
 
 def get_local_ocr(img_pil):
-    """EasyOCR을 사용하여 이미지 내의 모든 텍스트를 문장 끊김 없이 전문 추출 (한/영 지원)"""
+    """이미지 전처리(배율 확대 + 그레이스케일) 후 OCR 판독률 개선 버전"""
     global _ocr_reader
     try:
         import easyocr
@@ -342,30 +342,34 @@ def get_local_ocr(img_pil):
             if _ocr_reader is None:
                 _ocr_reader = easyocr.Reader(['ko', 'en'])
         
-        img_np = np.array(img_pil)
-        # detail=1로 설정하여 좌표값(bbox)까지 가져옴
-        results = _ocr_reader.readtext(img_np, detail=1)
+        # 1. 이미지 전처리: 판독률 향상을 위해 1.5배 확대 및 그레이스케일 변환
+        w, h = img_pil.size
+        # 너무 작으면 판독이 어려우므로 확대 (1.5배가 적당함)
+        img_pre = img_pil.resize((int(w * 1.5), int(h * 1.5)), Image.Resampling.LANCZOS)
+        img_np = np.array(img_pre.convert('L')) # 그레이스케일로 대비 강조
+        
+        # 2. OCR 판독 (파라미터 튜닝)
+        # contrast_ths: 대비 임계값, low_text: 낮은 텍스트 감지 수준
+        results = _ocr_reader.readtext(img_np, detail=1, contrast_ths=0.1, low_text=0.3)
         
         if not results: return ""
         
-        # 1. 유효한 텍스트 필터링
+        # 3. 유효한 텍스트 필터링
         valid_blocks = []
         for (bbox, text, conf) in results:
             text = text.strip()
-            if len(text) < 2 or conf < 0.20: continue
+            if len(text) < 1 or conf < 0.15: continue # 아주 낮은 신뢰도만 거름
             
             # 블랙리스트 필터링
             if any(bl.lower() in text.lower() for bl in OCR_BLACKLIST): continue
             
-            # 블록의 상단 y좌표 기준으로 정렬하기 위해 저장
             y_top = bbox[0][1]
             x_left = bbox[0][0]
             valid_blocks.append({'y': y_top, 'x': x_left, 'text': text})
             
         if not valid_blocks: return ""
         
-        # 2. 스마트 문장 병합 (Y좌표가 비슷하면 같은 줄로 인식, 너무 떨어져 있지 않으면 이어붙임)
-        # 우선 Y좌표 순으로 정렬
+        # 4. 스마트 문장 병합 (1.5배 확대했으므로 Y좌표 간격 기준도 조정)
         valid_blocks.sort(key=lambda b: b['y'])
         
         lines = []
@@ -375,19 +379,16 @@ def get_local_ocr(img_pil):
             
             for i in range(1, len(valid_blocks)):
                 block = valid_blocks[i]
-                # 줄 바뀜 판단 기준 (글자 높이의 약 절반 이상 차이나면 다음 줄)
-                if block['y'] - last_y > 15: 
+                # 확대 기준(1.5배)으로 줄 바뀜 임계값 조정 (약 25px)
+                if block['y'] - last_y > 25: 
                     lines.append(current_line)
                     current_line = block['text']
                 else:
-                    # 같은 줄이면 띄어쓰기로 이어붙임
                     current_line += " " + block['text']
                 last_y = block['y']
             lines.append(current_line)
         
-        # 전문 합치기
         full_text = "\n".join(lines)
-        # 사진과 분리하여 따로 전송하므로 글자 수 제한을 넉넉하게 2000자로 확장
         return f"📖 **Full Text OCR 전문:**\n\n{full_text.strip()[:2000]}" 
     except Exception as e:
         return f"⚠️ OCR 오류 발생: {str(e)}"
