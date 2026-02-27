@@ -329,7 +329,8 @@ _ocr_lock = threading.Lock()
 OCR_BLACKLIST = [
     "0 Files With Changes", "Review Changes", "Ask anything", "mention", 
     "workflows", "Fast", "Gemini 3 Flash", "Screen Reader Optimized", 
-    "Antigravity - Settings", "Usage", "Thought for", "Open Agent Manager"
+    "Antigravity - Settings", "Usage", "Thought for", "Open Agent Manager",
+    "Running background command", "Relocate", "Cancel", "Good", "Bad", "Always run"
 ]
 
 def get_local_ocr(img_pil):
@@ -371,7 +372,7 @@ def send_chat_snapshot(caption="📊 [Auto] 변화 감지"):
     
     # 2. 상하단 헤더/푸터 건너뛰기
     chat_y = t + 65 # 헤더 약 65px 무시
-    chat_h = h - 65 - 125 # 하단 입력창 약 125px 무시
+    chat_h = h - 65 - 180 # 하단 입력창/푸터 약 180px 무시 (기존 125에서 상향)
     
     if chat_w <= 0 or chat_h <= 0: return
 
