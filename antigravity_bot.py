@@ -156,20 +156,55 @@ async def authorized(update: Update) -> bool:
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not await authorized(update): return
     await update.message.reply_text(
-        "✅ **Antigravity V3.2 원격 제어 가동 중**\n\n"
+        "✅ **Antigravity V3.3 원격 제어 가동 중**\n\n"
         "🔎 **모니터링**\n"
         "  /chat — 채팅창 줌인 캡처\n"
         "  /history — 최근 대화 로그 추출\n"
         "  /screenshot — 전체 화면 캡처\n\n"
-        "🎮 **UI 제어 매크로**\n"
-        "  /su /sd — 위/아래로 스크롤\n"
-        "  /runonce — 'Run Once' 버튼 클릭 시도\n"
-        "  /runall — 'Run All' 버튼 클릭 시도\n"
-        "  /click x y — 특정 좌표 클릭 (예: /click 2200 1300)\n\n"
+        "🔖 **아이콘 매크로 (이미지 기반)**\n"
+        "  /accept — Accept all (코드 수용)\n"
+        "  /proceed — → 버튼 (Agent 실행)\n"
+        "  /run — Run Alt+↵ (터미널 실행)\n"
+        "  /stop_agent — ■ 정지 (Agent 중단)\n"
+        "  /type <텍스트> — Review Changes 에 입력 & 전송\n\n"
+        "🎮 **좌표/스크롤 매크로**\n"
+        "  /su /sd — 위/아래 스크롤\n"
+        "  /runonce / /runall — 실행 버튼 (좌표 기반)\n"
+        "  /click x y — 특정 좌표 클릭\n\n"
         "📊 **기타**\n"
         "  /status — 통신 상태 확인\n"
         "  /stop — 긴급 중지"
     )
+
+async def cmd_accept(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    if not await authorized(update): return
+    push_inbound("__COMMAND:ICON:accept_all__")
+    await update.message.reply_text("✅ Accept all 클릭 지시")
+
+async def cmd_proceed(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    if not await authorized(update): return
+    push_inbound("__COMMAND:ICON:proceed__")
+    await update.message.reply_text("➡️ → (Agent 실행) 클릭 지시")
+
+async def cmd_run_terminal(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    if not await authorized(update): return
+    push_inbound("__COMMAND:ICON:run__")
+    await update.message.reply_text("▶️ Run Alt+↵ (터미널 실행) 클릭 지시")
+
+async def cmd_stop_agent(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    if not await authorized(update): return
+    push_inbound("__COMMAND:ICON:stop__")
+    await update.message.reply_text("⏹️ Agent 정지 클릭 지시")
+
+async def cmd_type(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    if not await authorized(update): return
+    if not ctx.args:
+        await update.message.reply_text("사용법: /type <입력할 텍스트>")
+        return
+    text = " ".join(ctx.args)
+    push_inbound(f"__COMMAND:ICON_TYPE:{text}__")
+    preview = text[:50] + "..." if len(text) > 50 else text
+    await update.message.reply_text(f"✍️ Review Changes 에 입력 지시: {preview}")
 
 async def cmd_su(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not await authorized(update): return
@@ -323,6 +358,12 @@ def main() -> None:
     app.add_handler(CommandHandler("runonce", cmd_runonce))
     app.add_handler(CommandHandler("runall", cmd_runall))
     app.add_handler(CommandHandler("click", cmd_click_manual))
+    # 이미지 기반 아이콘 명령어
+    app.add_handler(CommandHandler("accept", cmd_accept))
+    app.add_handler(CommandHandler("proceed", cmd_proceed))
+    app.add_handler(CommandHandler("run", cmd_run_terminal))
+    app.add_handler(CommandHandler("stop_agent", cmd_stop_agent))
+    app.add_handler(CommandHandler("type", cmd_type))
     app.add_handler(CommandHandler("stop", cmd_stop))
     app.add_handler(CommandHandler("status", cmd_status))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_message))

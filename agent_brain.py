@@ -1,7 +1,8 @@
 """
-agent_brain.py — 브릿지 에이전트 (v2.6 클린 정식판)
+agent_brain.py — 브릿지 에이전트 (v3.3)
 - 125% DPI 배율 및 마우스 좌표 최종 보정 완료
 - DEBUG_IMAGE 토글 추가 (기본 False)
+- 이미지 기반 버튼 클릭 지원 (icon_*.png)
 """
 import os, json, time, threading, tempfile, ctypes, requests
 import pyautogui, pyperclip, win32gui, win32con
@@ -72,6 +73,69 @@ def get_vscode_window_rect():
     rect = win32gui.GetWindowRect(hwnd)
     return hwnd, rect, title
 
+# ── 이미지 기반 버튼 클릭 ──────────────────────────────────────────────────────
+
+ICON_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".instruction")
+
+def click_icon(icon_name: str, confidence: float = 0.8, timeout: float = 0.0) -> bool:
+    """화면에서 아이콘 이미지를 찾아 클릭합니다.
+    timeout > 0 이면 해당 초만큼 반복 탐색합니다.
+    """
+    icon_path = os.path.join(ICON_DIR, f"icon_{icon_name}.png")
+    if not os.path.exists(icon_path):
+        push_msg(f"⚠️ 아이콘 파일 없음: icon_{icon_name}.png")
+        return False
+
+    deadline = time.time() + max(timeout, 0)
+    while True:
+        try:
+            pos = pyautogui.locateCenterOnScreen(icon_path, confidence=confidence)
+            if pos:
+                pyautogui.moveTo(pos, duration=0.2)
+                pyautogui.click()
+                return True
+        except Exception:
+            pass  # opencv 미설치 등 — 아래서 별도 안내
+        if time.time() >= deadline:
+            break
+        time.sleep(0.5)
+    return False
+
+
+def type_into_chatwindow(text: str) -> bool:
+    """Review Changes 창의 입력창을 찾아 텍스트를 입력하고 → 버튼(proceed)을 클릭합니다."""
+    # 1. chatwindow 패널 감지 (패널 중앙 어딘가 클릭 – 포커스 확보)
+    icon_path = os.path.join(ICON_DIR, "icon_chatwindow.png")
+    try:
+        panel_pos = pyautogui.locateCenterOnScreen(icon_path, confidence=0.75)
+    except Exception:
+        panel_pos = None
+
+    if panel_pos:
+        # 패널보다 조금 아래(입력창 영역) 클릭
+        pyautogui.moveTo(panel_pos.x, panel_pos.y + 80, duration=0.2)
+        pyautogui.click()
+    else:
+        push_msg("⚠️ Review Changes 창을 찾지 못했습니다. 창이 열려 있는지 확인하세요.")
+        return False
+
+    time.sleep(0.3)
+
+    # 2. 텍스트 입력
+    pyperclip.copy(text)
+    pyautogui.hotkey("ctrl", "a")
+    time.sleep(0.1)
+    pyautogui.hotkey("ctrl", "v")
+    time.sleep(0.3)
+
+    # 3. → (proceed) 버튼 클릭
+    if not click_icon("proceed", confidence=0.8):
+        push_msg("⚠️ → 버튼을 찾지 못했습니다. 수동으로 전송해 주세요.")
+        return False
+
+    return True
+
+
 def execute_brain_task(command: str) -> bool:
     hwnd, rect, title = get_vscode_window_rect()
     if not rect:
@@ -117,6 +181,25 @@ def execute_brain_task(command: str) -> bool:
             pyautogui.moveTo(btn_x, btn_y, duration=0.5)
             pyautogui.click()
             return True
+
+        elif cmd_type == "ICON":
+            # 이미지 기반 버튼 클릭
+            icon_name = parts[2] if len(parts) > 2 else ""
+            if not icon_name:
+                push_msg("❌ ICON 명령에 아이콘 이름이 없습니다.")
+                return False
+            found = click_icon(icon_name, confidence=0.8)
+            if not found:
+                push_msg(f"⚠️ 화면에서 '{icon_name}' 버튼을 찾지 못했습니다.")
+            return found
+
+        elif cmd_type == "ICON_TYPE":
+            # Review Changes 창 입력 (나머지 parts를 text로 재조합)
+            text = ":".join(parts[2:]) if len(parts) > 2 else ""
+            if not text:
+                push_msg("❌ ICON_TYPE 명령에 텍스트가 없습니다.")
+                return False
+            return type_into_chatwindow(text)
 
     # 2. 일반 텍스트 입력 처리
     text = command
