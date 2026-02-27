@@ -271,25 +271,11 @@ async def cmd_screenshot(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 
 async def cmd_chat(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not await authorized(update): return
-    await update.message.reply_text("📸 채팅창 포커스 캡처 중...")
+    await update.message.reply_text("📸 채팅창 정밀 캡처 중...")
     try:
-        hwnd, rect, title = get_vscode_window_rect()
-        if not rect:
-            await update.message.reply_text("❌ VS Code 창을 찾을 수 없습니다.")
-            return
-            
-        l, t, r, b = rect
-        w, h = r - l, b - t
-        
-        # 우측 35% 영역 (Antigravity 패널)을 타겟팅
-        chat_x = int(l + w * 0.65)
-        chat_w = int(w * 0.35)
-        
-        img = pyautogui.screenshot(region=(chat_x, t, chat_w, h))
-        buf = BytesIO()
-        img.save(buf, format="PNG")
-        buf.seek(0)
-        await update.message.reply_photo(buf, caption="채팅 패널")
+        from agent_brain import send_chat_snapshot
+        # send_chat_snapshot 내부에서 이미 텔레그램 전송을 처리함
+        send_chat_snapshot("📸 [Manual] 채팅 패널 스냅샷")
     except Exception as e:
         await update.message.reply_text(f"❌ 캡처 실패: {e}")
 
