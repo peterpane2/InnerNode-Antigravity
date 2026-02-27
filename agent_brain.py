@@ -316,11 +316,33 @@ def find_color_buttons(img_pil):
         return buttons
     except Exception: return []
 
+def send_chat_snapshot():
+    """채팅 영역 스냅샷을 찍어 텔레그램으로 전송 (아이콘 명령 없이도 작동)"""
+    hwnd, rect, _ = get_vscode_window_rect()
+    if not rect: return
+    l, t, r, b = rect
+    w, h = r - l, b - t
+    # 채팅 영역 캡처 (오른쪽 30% 영역 추정)
+    zone_l, zone_t = l + int(w * 0.7), t + 40
+    zone_w, zone_h = int(w * 0.3), h - 100
+    try:
+        shot = pyautogui.screenshot(region=(zone_l, zone_t, zone_w, zone_h))
+        # push_img는 DEBUG_IMAGE가 True여야만 작동하므로, 직접 전송 로직 사용
+        buf = BytesIO()
+        shot.save(buf, format="PNG")
+        buf.seek(0)
+        requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto", 
+                      files={'photo': buf}, 
+                      data={'chat_id': int(CHAT_ID), 'caption': "📊 [Auto] 현재 대화창 상황"}, 
+                      timeout=15)
+    except: pass
+
 def auto_watcher_loop():
-    """5초마다 아이콘 스캔 + 색상 버튼 감지 + 마우스 휠 스크롤 다운"""
+    """5초마다 스캔/스크롤, 1분마다 채팅 스냅샷 전송"""
     global _auto_watch_active
     COOLDOWN = 5.0 
     last_click: dict = {}
+    last_snapshot = 0
 
     while True:
         with _auto_watch_lock:
@@ -353,16 +375,20 @@ def auto_watcher_loop():
                     time.sleep(0.3)
             except: pass
 
-        # B. 색상 기반 승인 버튼 감지 (Approver 통합)
+        # B. 채팅 스냅샷 전송 (매 60초)
+        now = time.time()
+        if now - last_snapshot >= 60:
+            send_chat_snapshot()
+            last_snapshot = now
+
+        # C. 색상 기반 승인 버튼 감지 (Approver 통합)
         try:
-            # VS Code 영역 캡처 (상단 메뉴/하단 상태줄 제외한 중앙 위주)
             zone_l, zone_t = max(0, l + int(w*0.15)), max(0, t + 40)
             zone_w, zone_h = min(int(w*0.8), pyautogui.size()[0]-zone_l), min(h-100, pyautogui.size()[1]-zone_t)
             if zone_w > 0 and zone_h > 0:
                 shot = pyautogui.screenshot(region=(zone_l, zone_t, zone_w, zone_h))
                 c_btns = find_color_buttons(shot)
                 if c_btns:
-                    # 상단 35%에 버튼 있으면 그것 우선 (Run/Allow 등)
                     top_b = [btn for btn in c_btns if btn["y"] < zone_h * 0.35]
                     target = top_b[0] if top_b else sorted(c_btns, key=lambda b: b["y"], reverse=True)[0]
                     rx, ry = zone_l + target["x"], zone_t + target["y"]
@@ -372,7 +398,7 @@ def auto_watcher_loop():
                     time.sleep(0.3)
         except: pass
 
-        # C. 마우스 휠 스크롤 다운 (채팅 따라가기)
+        # D. 마우스 휠 스크롤 다운 (채팅 따라가기)
         try:
             sx, sy = int(l + w * 0.85), int(t + h * 0.5)
             pyautogui.moveTo(sx, sy)
