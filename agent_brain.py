@@ -322,31 +322,34 @@ def find_color_buttons(img_pil):
         return buttons
     except Exception: return []
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+_ocr_reader = None
+_ocr_lock = threading.Lock()
 
-def get_gemini_ocr(img_pil):
-    """Gemini 1.5 Flash를 사용하여 채팅창의 마지막 메시지를 텍스트로 추출"""
-    if not GEMINI_API_KEY: return ""
+def get_local_ocr(img_pil):
+    """EasyOCR을 사용하여 채팅창의 마지막 메시지를 로컬에서 추출 (한/영 지원)"""
+    global _ocr_reader
     try:
-        import base64
-        buf = BytesIO()
-        img_pil.save(buf, format="JPEG", quality=80)
-        img_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+        import easyocr
+        with _ocr_lock:
+            if _ocr_reader is None:
+                # 최초 실행 시 모델 로드 (GPU가 있으면 자동으로 사용, 없으면 CPU)
+                _ocr_reader = easyocr.Reader(['ko', 'en'])
         
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
-        payload = {
-            "contents": [{
-                "parts": [
-                    {"text": "Extract the very last coding assistant message from this screenshot. Be concise and return only the text of the message."},
-                    {"inline_data": {"mime_type": "image/jpeg", "data": img_b64}}
-                ]
-            }]
-        }
-        res = requests.post(url, json=payload, timeout=10)
-        data = res.json()
-        text = data['candidates'][0]['content']['parts'][0]['text']
-        return f"\n\n📝 **AI 내용 요약:**\n{text.strip()[:300]}"
-    except: return ""
+        img_np = np.array(img_pil)
+        # readtext 결과: [(bbox, text, conf), ...]
+        results = _ocr_reader.readtext(img_np)
+        
+        if not results: return ""
+        
+        # 텍스트들 합치기 (최대 10줄)
+        lines = [res[1] for res in results]
+        summary = "\n".join(lines[-10:])
+        return f"\n\n📝 **Local OCR 요약:**\n{summary.strip()[:400]}"
+    except Exception as e:
+        return f"\n\n⚠️ OCR 오류: {str(e)}"
+
+# 이전 Gemini 코드는 삭제하거나 이름을 변경합니다.
+get_gemini_ocr = get_local_ocr 
 
 def send_chat_snapshot(caption="📊 [Auto] 변화 감지"):
     """채팅 영역 스냅샷 + OCR 요약 + 리모컨 인라인 버튼 전송"""
