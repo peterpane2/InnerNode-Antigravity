@@ -277,9 +277,10 @@ _auto_watch_active = False
 _auto_watch_lock = threading.Lock()
 
 # 감시할 아이콘 목록: (아이콘이름, 표시라벨, confidence)
+# ⚠️ proceed는 비활성(grey) 상태를 무시하기 위해 confidence 높게 설정
 AUTO_ICONS = [
     ("accept_all",  "✅ Accept all",   0.8),
-    ("proceed",     "➡️ Proceed",      0.8),
+    ("proceed",     "➡️ Proceed",      0.92),
     ("run",         "▶️ Run",          0.8),
     ("scrolldown",  "🔽 Scroll Down",   0.8),
 ]
