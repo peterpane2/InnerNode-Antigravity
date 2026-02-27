@@ -262,7 +262,11 @@ def execute_brain_task(command: str) -> bool:
     time.sleep(0.1)
     pyautogui.hotkey("ctrl", "v")
     time.sleep(0.3)
-    pyautogui.press("enter")
+    # 4. 전송 버튼(proceed) 클릭 시도 (또는 엔터)
+    if not click_icon("proceed", confidence=0.8, timeout=3.0):
+        pyautogui.press("enter")
+        # push_msg("⚠️ 전송 버튼(→) 못 찾아서 Enter로 전송함") # 너무 잦은 알림 방지 원하시면 주석
+    
     return True
 
 def inbound_loop():
@@ -404,7 +408,7 @@ def auto_watcher_loop():
         try:
             sx, sy = int(l + w * 0.85), int(t + h * 0.5)
             pyautogui.moveTo(sx, sy)
-            pyautogui.scroll(-10)  # 훨씬 더 많이 아래로 스크롤
+            pyautogui.scroll(-15)  # 훨씬 더 많이 아래로 스크롤
         except: pass
 
         time.sleep(7)
