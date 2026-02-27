@@ -270,14 +270,24 @@ async def cmd_screenshot(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         await update.message.reply_text(f"❌ 스크린샷 실패: {e}")
 
 async def cmd_ss(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """채팅창 본문 정밀 캡처 + OCR (수동)"""
+    """채팅창 본문 정밀 캡처 (OCR 제외)"""
     if not await authorized(update): return
     await update.message.reply_text("📸 채팅창 본문 정밀 캡처 중...")
     try:
         from agent_brain import send_chat_snapshot
-        send_chat_snapshot("📸 [Manual] 채팅창 스냅샷")
+        send_chat_snapshot("📸 [Manual] 채팅창 스냅샷", include_ocr=False)
     except Exception as e:
         await update.message.reply_text(f"❌ 캡처 실패: {e}")
+
+async def cmd_ocr(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """채팅창 본문 정밀 캡처 + OCR 리포트"""
+    if not await authorized(update): return
+    await update.message.reply_text("📖 채팅창 OCR 분석 중...")
+    try:
+        from agent_brain import send_chat_snapshot
+        send_chat_snapshot("📸 [Manual] 채팅창 OCR 리포트", include_ocr=True)
+    except Exception as e:
+        await update.message.reply_text(f"❌ 분석 실패: {e}")
 
 async def cmd_debug(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """OCR 및 캡처 영역 정밀 진단"""
@@ -394,7 +404,8 @@ def main() -> None:
         commands = [
             BotCommand("auto", "🤖 자동 승인 시작 (아이콘+색상+스크롤+스냅샷)"),
             BotCommand("autooff", "⏹️ 자동 승인 중단"),
-            BotCommand("ss", "📸 채팅창 본문 정밀 캡처 + OCR"),
+            BotCommand("ss", "📸 채팅창 본문 정밀 캡처"),
+            BotCommand("ocr", "📖 채팅창 본문 정밀 캡처 + OCR"),
             BotCommand("debug", "🔎 OCR/캡처 영역 정밀 진단"),
             BotCommand("type", "✍️ 텍스트 입력 및 전송 (사용법: /type 메시지)"),
             BotCommand("accept", "✅ Accept All 클릭"),
@@ -412,7 +423,8 @@ def main() -> None:
     app = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("screenshot", cmd_screenshot))
-    app.add_handler(CommandHandler("ss", cmd_ss)) # /chat 대신 /ss 사용
+    app.add_handler(CommandHandler("ss", cmd_ss)) 
+    app.add_handler(CommandHandler("ocr", cmd_ocr))
     app.add_handler(CommandHandler("debug", cmd_debug))
     app.add_handler(CommandHandler("history", cmd_history))
     app.add_handler(CommandHandler("su", cmd_su))

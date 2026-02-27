@@ -410,10 +410,10 @@ def get_local_ocr(img_pil):
 
 get_gemini_ocr = get_local_ocr 
 
-def send_chat_snapshot(caption="📊 [Auto] 변화 감지"):
+def send_chat_snapshot(caption="📊 [Auto] 변화 감지", include_ocr=True):
     """채팅 본문만 정밀 캡처 + 리모컨 인라인 버튼 전송 + 진단 정보 제공"""
     hwnd, rect, _ = get_vscode_window_rect()
-    if not rect: return
+    if not rect: return None
     l, t, r, b = rect
     w, h = r - l, b - t
     
@@ -437,7 +437,10 @@ def send_chat_snapshot(caption="📊 [Auto] 변화 감지"):
         debug_path = os.path.join(debug_dir, "last_capture.png")
         shot.save(debug_path)
 
-        ocr_text = get_gemini_ocr(shot)
+        # OCR 처리 여부 선택
+        ocr_text = None
+        if include_ocr:
+            ocr_text = get_gemini_ocr(shot)
         
         # 디버그 정보 추가 (캡처 영역 좌표)
         debug_info = ""
@@ -477,8 +480,8 @@ def send_chat_snapshot(caption="📊 [Auto] 변화 감지"):
                       }, 
                       timeout=15)
         
-        # 2. OCR 리포트 별도 전송 (독립된 텍스트 메시지)
-        if ocr_text and len(ocr_text.strip()) > 0:
+        # 2. OCR 리포트 별도 전송 (요청 시에만)
+        if include_ocr and ocr_text and len(ocr_text.strip()) > 0:
             print(f"[*] Sending OCR report ({len(ocr_text)} chars)...")
             # MarkdownV2 대신 일반 Markdown을 쓰되, 특수문자 충돌 방지를 위해 실패 시 일반 텍스트로 재시도
             msg_res = requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
