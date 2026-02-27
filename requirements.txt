@@ -1,0 +1,9 @@
+python-telegram-bot[job-queue]>=21.0
+python-dotenv
+pyautogui
+pyperclip
+pywin32
+requests
+numpy
+scipy
+Pillow

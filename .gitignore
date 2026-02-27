@@ -1,0 +1,19 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment and Data (CRITICAL)
+.env
+mailbox.json
+*.tmp
+*.pb
+
+# Logs and Nodes
+node_modules/
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
