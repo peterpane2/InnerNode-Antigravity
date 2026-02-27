@@ -153,8 +153,8 @@ def execute_brain_task(command: str) -> bool:
 
     # 1. 시스템 명령어 처리 (매크로)
     if command.startswith("__COMMAND:"):
-        # 끝의 __ 제거: __COMMAND:AUTO_WATCH_ON__ -> __COMMAND:AUTO_WATCH_ON
-        clean_command = command.rstrip("_")
+        # 끝의 __ 정확히 2글자만 제거 (rstrip은 accept_all 같은 어절미 손상)
+        clean_command = command[:-2] if command.endswith("__") else command
         parts = clean_command.split(":")
         cmd_type = parts[1]
         
@@ -202,12 +202,14 @@ def execute_brain_task(command: str) -> bool:
             return found
 
         elif cmd_type == "ICON_TYPE":
-            # Review Changes 창 입력 (나머지 parts를 text로 재조합, 끝 __ 제거)
-            text = ":".join(parts[2:]).rstrip("_") if len(parts) > 2 else ""
+            # Review Changes 창 입력
+            raw = ":".join(parts[2:]) if len(parts) > 2 else ""
+            # 끝의 __ 제거 (이미 clean_command로 제거됨 — 보이지 않지만 안전단)
+            text = raw[:-2] if raw.endswith("__") else raw
             if not text:
                 push_msg("❌ ICON_TYPE 명령에 텍스트가 없습니다.")
                 return False
-            push_msg(f"🔍 입력 타격: '{text[:30]}'")  # 디버그
+            push_msg(f"🔍 입력 타겟: '{text[:40]}'")  # 디버그
             return type_into_chatwindow(text)
 
         elif cmd_type == "AUTO_WATCH_ON":
