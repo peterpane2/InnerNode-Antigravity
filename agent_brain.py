@@ -316,6 +316,8 @@ def find_color_buttons(img_pil):
             area = np.sum(labeled[slices] == (i + 1))
             if w < 40 or h < 20 or w > 350 or h > 80: continue
             if area < 350 or (w/h) < 1.1 or (w/h) > 7.0: continue
+            # Solidity 체크: 사각형 면적 대비 실제 색상이 60% 이상 채워져야 버튼으로 인정
+            if area / (w * h) < 0.60: continue
             buttons.append({"x": sx.start + w // 2, "y": sy.start + h // 2})
         return buttons
     except Exception: return []
@@ -389,8 +391,9 @@ def auto_watcher_loop():
 
         # C. 색상 기반 승인 버튼 감지 (Approver 통합)
         try:
-            zone_l, zone_t = max(0, l + int(w*0.15)), max(0, t + 40)
-            zone_w, zone_h = min(int(w*0.8), pyautogui.size()[0]-zone_l), min(h-100, pyautogui.size()[1]-zone_t)
+            # VS Code 영역 캡처 (에디터 왼쪽 40%를 건너뜀으로써 오작동 방지)
+            zone_l, zone_t = max(0, l + int(w*0.40)), max(0, t + 40)
+            zone_w, zone_h = min(int(w*0.55), pyautogui.size()[0]-zone_l), min(h-100, pyautogui.size()[1]-zone_t)
             if zone_w > 0 and zone_h > 0:
                 shot = pyautogui.screenshot(region=(zone_l, zone_t, zone_w, zone_h))
                 c_btns = find_color_buttons(shot)
