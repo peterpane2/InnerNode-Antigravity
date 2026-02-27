@@ -206,6 +206,11 @@ async def cmd_type(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     preview = text[:50] + "..." if len(text) > 50 else text
     await update.message.reply_text(f"✍️ Review Changes 에 입력 지시: {preview}")
 
+async def cmd_scrolldown(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    if not await authorized(update): return
+    push_inbound("__COMMAND:ICON:scrolldown__")
+    await update.message.reply_text("🔽 스크롤다운 아이콘 클릭 지시")
+
 async def cmd_su(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not await authorized(update): return
     push_inbound("__COMMAND:SCROLL:UP__")
@@ -364,6 +369,7 @@ def main() -> None:
     app.add_handler(CommandHandler("run", cmd_run_terminal))
     app.add_handler(CommandHandler("stop_agent", cmd_stop_agent))
     app.add_handler(CommandHandler("type", cmd_type))
+    app.add_handler(CommandHandler("scrolldown", cmd_scrolldown))
     app.add_handler(CommandHandler("stop", cmd_stop))
     app.add_handler(CommandHandler("status", cmd_status))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_message))
