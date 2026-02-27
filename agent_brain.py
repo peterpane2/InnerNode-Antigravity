@@ -334,7 +334,7 @@ OCR_BLACKLIST = [
 ]
 
 def get_local_ocr(img_pil):
-    """EasyOCR을 사용하여 이미지 전체에서 텍스트 추출 (한/영 지원)"""
+    """EasyOCR을 사용하여 이미지 전체에서 텍스트 추출 및 필터링 (한/영 지원)"""
     global _ocr_reader
     try:
         import easyocr
@@ -347,12 +347,26 @@ def get_local_ocr(img_pil):
         
         if not results: return ""
         
-        # 텍스트들 합치기 (최근 위주로)
-        lines = [res[1] for res in results if res[2] > 0.3] # 신뢰도 0.3 이상만
-        if not lines: return ""
+        # 1. 지능형 필터링 및 텍스트 정제
+        filtered_lines = []
+        for res in results:
+            text = res[1].strip()
+            conf = res[2]
+            
+            # 너무 짧거나 신뢰도가 낮은 것은 무시
+            if len(text) < 2 or conf < 0.25: continue
+            
+            # 블랙리스트 포함 여부 체크 (대소문자 무시)
+            is_blacklisted = any(bl.lower() in text.lower() for bl in OCR_BLACKLIST)
+            if is_blacklisted: continue
+            
+            filtered_lines.append(text)
         
-        summary = "\n".join(lines[-12:]) # 조금 더 넉넉하게 12줄
-        return f"\n\n📝 **Local OCR 요약:**\n{summary.strip()[:600]}"
+        if not filtered_lines: return ""
+        
+        # 최근 15줄 요약 (중요 대화 맥락 확보)
+        summary = "\n".join(filtered_lines[-15:])
+        return f"\n\n📝 **Local OCR 요약:**\n{summary.strip()[:800]}"
     except Exception as e:
         return f"\n\n⚠️ OCR 오류: {str(e)}"
 
@@ -366,13 +380,13 @@ def send_chat_snapshot(caption="📊 [Auto] 변화 감지"):
     w, h = r - l, b - t
     
     # 🎯 이미지 캡처 영역 정밀 조절
-    # 1. 좌측 여백 건너뛰기: 오른쪽 35% 영역 중에서도 80px 더 오른쪽에서 시작
-    chat_x = int(l + w * 0.65) + 80
-    chat_w = int(w * 0.35) - 80
+    # 1. 좌측 여백 건너뛰기: 오른쪽 35% 영역 중에서도 100px 더 오른쪽에서 시작 (사이드바/라인넘버 제거)
+    chat_x = int(l + w * 0.65) + 100
+    chat_w = int(w * 0.35) - 100
     
     # 2. 상하단 헤더/푸터 건너뛰기
     chat_y = t + 65 # 헤더 약 65px 무시
-    chat_h = h - 65 - 180 # 하단 입력창/푸터 약 180px 무시 (기존 125에서 상향)
+    chat_h = h - 65 - 200 # 하단 입력창/푸터 약 200px 무시 (더 강화)
     
     if chat_w <= 0 or chat_h <= 0: return
 
