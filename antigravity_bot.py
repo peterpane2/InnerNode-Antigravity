@@ -211,6 +211,21 @@ async def cmd_scrolldown(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     push_inbound("__COMMAND:ICON:scrolldown__")
     await update.message.reply_text("🔽 스크롤다운 아이콘 클릭 지시")
 
+async def cmd_auto(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    if not await authorized(update): return
+    push_inbound("__COMMAND:AUTO_WATCH_ON__")
+    await update.message.reply_text(
+        "🤖 **Auto Watch 시작!**\n"
+        "0.5초마다 다음 아이콘을 감시합니다:\n"
+        "✅ Accept all | ➡️ Proceed | ▶️ Run | 🔽 Scroll Down\n"
+        "/autooff 로 중단할 수 있습니다."
+    )
+
+async def cmd_autooff(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    if not await authorized(update): return
+    push_inbound("__COMMAND:AUTO_WATCH_OFF__")
+    await update.message.reply_text("⏹️ Auto Watch 중단 지시")
+
 async def cmd_su(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not await authorized(update): return
     push_inbound("__COMMAND:SCROLL:UP__")
@@ -370,6 +385,8 @@ def main() -> None:
     app.add_handler(CommandHandler("stop_agent", cmd_stop_agent))
     app.add_handler(CommandHandler("type", cmd_type))
     app.add_handler(CommandHandler("scrolldown", cmd_scrolldown))
+    app.add_handler(CommandHandler("auto", cmd_auto))
+    app.add_handler(CommandHandler("autooff", cmd_autooff))
     app.add_handler(CommandHandler("stop", cmd_stop))
     app.add_handler(CommandHandler("status", cmd_status))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_message))

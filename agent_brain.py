@@ -1,8 +1,9 @@
 """
-agent_brain.py — 브릿지 에이전트 (v3.3)
+agent_brain.py — 브릿지 에이전트 (v3.4)
 - 125% DPI 배율 및 마우스 좌표 최종 보정 완료
 - DEBUG_IMAGE 토글 추가 (기본 False)
 - 이미지 기반 버튼 클릭 지원 (icon_*.png)
+- /auto: 실시간 자동 아이콘 감시 & 클릭
 """
 import os, json, time, threading, tempfile, ctypes, requests
 import pyautogui, pyperclip, win32gui, win32con
@@ -201,6 +202,17 @@ def execute_brain_task(command: str) -> bool:
                 return False
             return type_into_chatwindow(text)
 
+        elif cmd_type == "AUTO_WATCH_ON":
+            global _auto_watch_active
+            _auto_watch_active = True
+            push_msg("🤖 Auto Watch ON: accept_all / proceed / run / scrolldown 감시 시작!")
+            return True
+
+        elif cmd_type == "AUTO_WATCH_OFF":
+            _auto_watch_active = False
+            push_msg("⏹️ Auto Watch OFF: 자동 감시 중단")
+            return True
+
     # 2. 일반 텍스트 입력 처리
     text = command
     if text.startswith("[📱MOBILE]"):
@@ -235,7 +247,7 @@ def execute_brain_task(command: str) -> bool:
     return True
 
 def inbound_loop():
-    print("🚀 [Inbound Thread] v2.6 정식판 시작")
+    print("🚀 [Inbound Thread] v3.4 시작")
     while True:
         try:
             box = read_mailbox()
@@ -247,9 +259,58 @@ def inbound_loop():
         except Exception as e: print(f"Error: {e}")
         time.sleep(1)
 
+
+# ── Auto Watcher ─────────────────────────────────────────────────────────────────
+
+_auto_watch_active = False
+_auto_watch_lock = threading.Lock()
+
+# 감시할 아이콘 목록: (아이콘이름, 표시라벨, confidence)
+AUTO_ICONS = [
+    ("accept_all",  "✅ Accept all",   0.8),
+    ("proceed",     "➡️ Proceed",      0.8),
+    ("run",         "▶️ Run",          0.8),
+    ("scrolldown",  "🔽 Scroll Down",   0.8),
+]
+
+def auto_watcher_loop():
+    """0.5초마다 아이콘을 스캔하여 발견시 자동 클릭"""
+    global _auto_watch_active
+    COOLDOWN = 2.0  # 같은 아이콘 재클릭 방지 (ms)
+    last_click: dict = {}  # icon_name -> last click timestamp
+
+    while True:
+        with _auto_watch_lock:
+            active = _auto_watch_active
+        if not active:
+            time.sleep(0.5)
+            continue
+
+        for icon_name, label, conf in AUTO_ICONS:
+            icon_path = os.path.join(ICON_DIR, f"icon_{icon_name}.png")
+            if not os.path.exists(icon_path):
+                continue
+            # 쿜다운 체크
+            now = time.time()
+            if now - last_click.get(icon_name, 0) < COOLDOWN:
+                continue
+            try:
+                pos = pyautogui.locateCenterOnScreen(icon_path, confidence=conf)
+                if pos:
+                    pyautogui.moveTo(pos, duration=0.15)
+                    pyautogui.click()
+                    last_click[icon_name] = time.time()
+                    push_msg(f"🤖 [Auto] {label} 자동 클릭")
+                    time.sleep(0.3)  # 클릭 후 잠시 대기
+            except Exception:
+                pass
+
+        time.sleep(0.5)
+
 if __name__ == "__main__":
-    t = threading.Thread(target=inbound_loop, daemon=True)
-    t.start()
+    threading.Thread(target=inbound_loop, daemon=True).start()
+    threading.Thread(target=auto_watcher_loop, daemon=True).start()
+    print("🤖 Auto Watcher 스레드 대기 중 (/auto 명령으로 활성화)")
     try:
         while True: time.sleep(1)
     except KeyboardInterrupt: pass
