@@ -340,7 +340,7 @@ def send_chat_snapshot():
     except: pass
 
 def auto_watcher_loop():
-    """5초마다 스캔/스크롤, 1분마다 채팅 스냅샷 전송"""
+    """7초마다 스캔/스크롤, 1분마다 채팅 스냅샷 전송"""
     global _auto_watch_active
     COOLDOWN = 5.0 
     last_click: dict = {}
@@ -355,7 +355,7 @@ def auto_watcher_loop():
 
         hwnd, rect, _ = get_vscode_window_rect()
         if not rect:
-            time.sleep(5)
+            time.sleep(7)
             continue
         
         l, t, r, b = rect
@@ -404,10 +404,10 @@ def auto_watcher_loop():
         try:
             sx, sy = int(l + w * 0.85), int(t + h * 0.5)
             pyautogui.moveTo(sx, sy)
-            pyautogui.scroll(-3)
+            pyautogui.scroll(-10)  # 훨씬 더 많이 아래로 스크롤
         except: pass
 
-        time.sleep(5)
+        time.sleep(7)
 
 if __name__ == "__main__":
     threading.Thread(target=inbound_loop, daemon=True).start()
