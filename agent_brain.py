@@ -143,6 +143,25 @@ def type_into_chatwindow(text: str) -> bool:
 
 
 def execute_brain_task(command: str) -> bool:
+    global _auto_watch_active
+
+    # 0. VS Code 없이도 처리 가능한 명령어 (Auto Watch 등)
+    if command.startswith("__COMMAND:"):
+        clean_command = command[:-2] if command.endswith("__") else command
+        parts = clean_command.split(":")
+        cmd_type = parts[1]
+
+        if cmd_type == "AUTO_WATCH_ON":
+            _auto_watch_active = True
+            push_msg("🤖 Auto Watch ON: accept_all / proceed / run / scrolldown 감시 시작!")
+            return True
+
+        elif cmd_type == "AUTO_WATCH_OFF":
+            _auto_watch_active = False
+            push_msg("⏹️ Auto Watch OFF: 자동 감시 중단")
+            return True
+
+    # 1. VS Code 창 필요한 명령어
     hwnd, rect, title = get_vscode_window_rect()
     if not rect:
         push_msg("❌ VS Code 창을 찾을 수 없습니다.")
@@ -151,16 +170,14 @@ def execute_brain_task(command: str) -> bool:
     l, t, r, b = rect
     w, h = r - l, b - t
 
-    # 1. 시스템 명령어 처리 (매크로)
+    # 2. 시스템 명령어 처리 (매크로)
     if command.startswith("__COMMAND:"):
-        # 끝의 __ 정확히 2글자만 제거 (rstrip은 accept_all 같은 어절미 손상)
         clean_command = command[:-2] if command.endswith("__") else command
         parts = clean_command.split(":")
         cmd_type = parts[1]
         
         if cmd_type == "SCROLL":
             direction = parts[2]
-            # 채팅창 위치로 이동 후 스크롤
             scroll_x = int(l + w * 0.85)
             scroll_y = int(t + h * 0.5)
             pyautogui.moveTo(scroll_x, scroll_y)
@@ -175,7 +192,6 @@ def execute_brain_task(command: str) -> bool:
             return True
 
         elif cmd_type == "CLICK_RUN_ONCE":
-            # 125% 배율 기준 'Run Once' 버튼 추정 위치 (보통 입력창 위쪽)
             btn_x = int(l + w * 0.78) 
             btn_y = int(t + h * 0.88)
             pyautogui.moveTo(btn_x, btn_y, duration=0.5)
@@ -183,7 +199,6 @@ def execute_brain_task(command: str) -> bool:
             return True
 
         elif cmd_type == "CLICK_RUN_ALL":
-            # 125% 배율 기준 'Run All' 버튼 추정 위치
             btn_x = int(l + w * 0.85) 
             btn_y = int(t + h * 0.88)
             pyautogui.moveTo(btn_x, btn_y, duration=0.5)
@@ -191,7 +206,6 @@ def execute_brain_task(command: str) -> bool:
             return True
 
         elif cmd_type == "ICON":
-            # 이미지 기반 버튼 클릭
             icon_name = parts[2] if len(parts) > 2 else ""
             if not icon_name:
                 push_msg("❌ ICON 명령에 아이콘 이름이 없습니다.")
@@ -202,26 +216,13 @@ def execute_brain_task(command: str) -> bool:
             return found
 
         elif cmd_type == "ICON_TYPE":
-            # Review Changes 창 입력
             raw = ":".join(parts[2:]) if len(parts) > 2 else ""
-            # 끝의 __ 제거 (이미 clean_command로 제거됨 — 보이지 않지만 안전단)
             text = raw[:-2] if raw.endswith("__") else raw
             if not text:
                 push_msg("❌ ICON_TYPE 명령에 텍스트가 없습니다.")
                 return False
-            push_msg(f"🔍 입력 타겟: '{text[:40]}'")  # 디버그
+            push_msg(f"🔍 입력 타겟: '{text[:40]}'")
             return type_into_chatwindow(text)
-
-        elif cmd_type == "AUTO_WATCH_ON":
-            global _auto_watch_active
-            _auto_watch_active = True
-            push_msg("🤖 Auto Watch ON: accept_all / proceed / run / scrolldown 감시 시작!")
-            return True
-
-        elif cmd_type == "AUTO_WATCH_OFF":
-            _auto_watch_active = False
-            push_msg("⏹️ Auto Watch OFF: 자동 감시 중단")
-            return True
 
     # 2. 일반 텍스트 입력 처리
     text = command
