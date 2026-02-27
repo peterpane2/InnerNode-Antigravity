@@ -9,8 +9,8 @@ echo ===================================================
 :: 0. 기존 프로세스 정리 (중복 실행 방지)
 echo [*] 기존 프로세스 정리 중...
 taskkill /f /im python.exe /fi "WINDOWTITLE eq Antigravity*" > nul 2>&1
-:: 세밀하게 우리 스크립트만 골라 끄기 (PowerShell 이용)
-powershell -Command "Get-Process python -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*antigravity_bot.py*' -or $_.CommandLine -like '*agent_brain.py*' -or $_.CommandLine -like '*auto_approver.py*' } | Stop-Process -Force" > nul 2>&1
+:: 더 강력한 PowerShell 기반 프로세스 정리 (Get-CimInstance 사용)
+powershell -Command "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*antigravity_bot.py*' -or $_.CommandLine -like '*agent_brain.py*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }" > nul 2>&1
 
 :: 1. 가상환경 생성 (최초 1회)
 if not exist .venv (
