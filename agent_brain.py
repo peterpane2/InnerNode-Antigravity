@@ -317,7 +317,7 @@ def find_color_buttons(img_pil):
     except Exception: return []
 
 def auto_watcher_loop():
-    """3초마다 아이콘 스캔 + 색상 버튼 감지 + 마우스 휠 스크롤 다운"""
+    """5초마다 아이콘 스캔 + 색상 버튼 감지 + 마우스 휠 스크롤 다운"""
     global _auto_watch_active
     COOLDOWN = 5.0 
     last_click: dict = {}
@@ -331,7 +331,7 @@ def auto_watcher_loop():
 
         hwnd, rect, _ = get_vscode_window_rect()
         if not rect:
-            time.sleep(3)
+            time.sleep(5)
             continue
         
         l, t, r, b = rect
@@ -379,7 +379,7 @@ def auto_watcher_loop():
             pyautogui.scroll(-3)
         except: pass
 
-        time.sleep(3)
+        time.sleep(5)
 
 if __name__ == "__main__":
     threading.Thread(target=inbound_loop, daemon=True).start()
