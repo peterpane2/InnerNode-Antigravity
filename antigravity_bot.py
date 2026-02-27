@@ -216,7 +216,7 @@ async def cmd_auto(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     push_inbound("__COMMAND:AUTO_WATCH_ON__")
     await update.message.reply_text(
         "🤖 **Auto Watch 시작!**\n"
-        "0.5초마다 다음 아이콘을 감시합니다:\n"
+        "7초마다 다음 아이콘을 감시합니다:\n"
         "✅ Accept all | ➡️ Proceed | ▶️ Run | 🔽 Scroll Down\n"
         "/autooff 로 중단할 수 있습니다."
     )
@@ -329,7 +329,7 @@ async def on_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     text = update.message.text or ""
     tagged = f"[📱MOBILE] {text}"
     push_inbound(tagged)
-    await update.message.reply_text("📨 Antigravity에 전달 중...")
+    await update.message.reply_text("📨 Antigravity에 전달됨")
 
 
 # ── outbound 감시 스레드 ─────────────────────────────────────────────────────
