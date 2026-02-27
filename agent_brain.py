@@ -325,30 +325,60 @@ def find_color_buttons(img_pil):
 _ocr_reader = None
 _ocr_lock = threading.Lock()
 
+# 무시할 UI 텍스트 목록 (블랙리스트)
+OCR_BLACKLIST = [
+    "0 Files With Changes", "Review Changes", "Ask anything", "mention", 
+    "workflows", "Fast", "Gemini 3 Flash", "Screen Reader Optimized", 
+    "Antigravity - Settings", "Usage", "Thought for", "Open Agent Manager"
+]
+
 def get_local_ocr(img_pil):
-    """EasyOCR을 사용하여 채팅창의 마지막 메시지를 로컬에서 추출 (한/영 지원)"""
+    """EasyOCR을 사용하여 채팅창 본문(상하단 제외)만 지능적으로 추출 (한/영 지원)"""
     global _ocr_reader
     try:
         import easyocr
         with _ocr_lock:
             if _ocr_reader is None:
-                # 최초 실행 시 모델 로드 (GPU가 있으면 자동으로 사용, 없으면 CPU)
                 _ocr_reader = easyocr.Reader(['ko', 'en'])
         
-        img_np = np.array(img_pil)
-        # readtext 결과: [(bbox, text, conf), ...]
+        # 1. 상단/하단 UI 영역 제외 크롭 (OCR용)
+        # 헤더(약 60px)와 하단 입력창(약 120px)을 잘라내어 본문만 집중
+        w, h = img_pil.size
+        top_crop = 60
+        bottom_crop = 120
+        if h > top_crop + bottom_crop:
+            img_ocr = img_pil.crop((0, top_crop, w, h - bottom_crop))
+        else:
+            img_ocr = img_pil
+
+        img_np = np.array(img_ocr)
         results = _ocr_reader.readtext(img_np)
         
         if not results: return ""
         
-        # 텍스트들 합치기 (최대 10줄)
-        lines = [res[1] for res in results]
-        summary = "\n".join(lines[-10:])
-        return f"\n\n📝 **Local OCR 요약:**\n{summary.strip()[:400]}"
+        # 2. 지능형 필터링
+        filtered_lines = []
+        for res in results:
+            text = res[1].strip()
+            conf = res[2]
+            
+            # 너무 짧거나 신뢰도가 낮은 것은 무시
+            if len(text) < 2 or conf < 0.3: continue
+            
+            # 블랙리스트 포함 여부 체크
+            is_blacklisted = any(bl.lower() in text.lower() for bl in OCR_BLACKLIST)
+            if is_blacklisted: continue
+            
+            filtered_lines.append(text)
+        
+        if not filtered_lines: return ""
+        
+        # 최근 10줄만 요약
+        summary = "\n".join(filtered_lines[-10:])
+        return f"\n\n📝 **Local OCR 요약:**\n{summary.strip()[:500]}"
     except Exception as e:
         return f"\n\n⚠️ OCR 오류: {str(e)}"
 
-# 이전 Gemini 코드는 삭제하거나 이름을 변경합니다.
 get_gemini_ocr = get_local_ocr 
 
 def send_chat_snapshot(caption="📊 [Auto] 변화 감지"):
