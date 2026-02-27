@@ -551,17 +551,18 @@ def auto_watcher_loop():
                     time.sleep(0.3)
             except: pass
 
-        # B. 스마트 변화 감지 (새 메시지 알림)
+        # B. 스마트 변화 감지 (새 메시지 알림) - 상태 업데이트 및 감지만 수행
+        curr_thumb = None
         try:
-            chat_x, chat_w = int(l + w * 0.65), int(w * 0.35)
-            # 아주 작은 썸네일로 비교 (속도/메모리 절약)
+            # 윈도우의 우측 50% 영역 감시 (더 넓게 확보)
+            chat_x, chat_w = int(l + w * 0.50), int(w * 0.50)
             current_chat = pyautogui.screenshot(region=(chat_x, t, chat_w, h))
             curr_thumb = np.array(current_chat.resize((50, 100)).convert('L'))
             
             if prev_chat_thumb is not None:
                 diff = np.mean(np.abs(curr_thumb.astype(float) - prev_chat_thumb.astype(float)))
-                # 차이가 일정 수준(배경 노이즈 이상)이면 변화로 간주
-                if diff > 1.5: 
+                # 민감도 향상 (1.5 -> 0.7)
+                if diff > 0.7: 
                     last_change_time = time.time()
                     change_notified = False
                 
@@ -569,13 +570,10 @@ def auto_watcher_loop():
                 if not change_notified and (time.time() - last_change_time > 3.0):
                     send_chat_snapshot("🔔 [Auto] AI가 새로운 내용을 작성했습니다.")
                     change_notified = True
-            
-            prev_chat_thumb = curr_thumb
         except: pass
 
-        # C. 색상 기반 승인 버튼 감지 (Approver 통합)
+        # C. 색상 기반 승인 버튼 감지
         try:
-            # VS Code 영역 캡처 (에디터 왼쪽 40%를 건너뜜으로써 오작동 방지)
             zone_l, zone_t = max(0, l + int(w*0.40)), max(0, t + 40)
             zone_w, zone_h = min(int(w*0.55), pyautogui.size()[0]-zone_l), min(h-100, pyautogui.size()[1]-zone_t)
             if zone_w > 0 and zone_h > 0:
@@ -596,13 +594,17 @@ def auto_watcher_loop():
             sx, sy = int(l + w * 0.85), int(t + h * 0.5)
             pyautogui.moveTo(sx, sy)
             pyautogui.scroll(-50)
+            # 스크롤 후 잠깐 대기하여 화면 안정화
+            if not change_notified: time.sleep(0.2)
         except: pass
 
-        # E. 1분 간격 정기 스냅샷 (사용자 요청)
-        now = time.time()
-        if now - last_interval_snapshot > 60:
-            send_chat_snapshot("⏲️ [Auto] 1분 간격 정기 스냅샷")
-            last_interval_snapshot = now
+        # E. 다음 루프를 위한 베이스라인 갱신 (모든 액션 완료 후!!)
+        try:
+            # 액션(클릭, 스크롤) 후의 상태를 캡처해야 다음 루프에서 '순수한 변화'만 감지 가능
+            chat_x, chat_w = int(l + w * 0.50), int(w * 0.50)
+            after_action_chat = pyautogui.screenshot(region=(chat_x, t, chat_w, h))
+            prev_chat_thumb = np.array(after_action_chat.resize((50, 100)).convert('L'))
+        except: pass
 
         time.sleep(1) # 루프 과부하 방지
 
