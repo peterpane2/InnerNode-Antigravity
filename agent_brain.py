@@ -341,15 +341,20 @@ def get_local_ocr(img_pil):
             if _ocr_reader is None:
                 _ocr_reader = easyocr.Reader(['ko', 'en'])
         
-        # 1. 상단/하단 UI 영역 제외 크롭 (OCR용)
-        # 헤더(약 60px)와 하단 입력창(약 120px)을 잘라내어 본문만 집중
+        # 1. 상단/하단/좌측 UI 영역 제외 크롭 (OCR용)
+        # 헤더(약 60px), 하단 입력창(약 120px), 좌측 여백(약 50px)을 잘라내어 본문만 집중
         w, h = img_pil.size
         top_crop = 60
         bottom_crop = 120
-        if h > top_crop + bottom_crop:
-            img_ocr = img_pil.crop((0, top_crop, w, h - bottom_crop))
-        else:
-            img_ocr = img_pil
+        left_crop = 50
+        
+        # 크롭 영역 계산 (최소 크기 보장)
+        new_l = min(left_crop, w - 10)
+        new_t = min(top_crop, h - 10)
+        new_r = w
+        new_b = max(new_t + 10, h - bottom_crop)
+        
+        img_ocr = img_pil.crop((new_l, new_t, new_r, new_b))
 
         img_np = np.array(img_ocr)
         results = _ocr_reader.readtext(img_np)
