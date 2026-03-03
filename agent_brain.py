@@ -449,33 +449,16 @@ def send_chat_snapshot(caption="📊 [Auto] 변화 감지", include_ocr=True):
         
         photo_caption = f"{caption}{debug_info}"
 
-        reply_markup = {
-            "inline_keyboard": [
-                [
-                    {"text": "✅ Accept All", "callback_data": "btn_accept"},
-                    {"text": "➡️ Proceed", "callback_data": "btn_proceed"}
-                ],
-                [
-                    {"text": "▶️ Run", "callback_data": "btn_run"},
-                    {"text": "🛑 Stop", "callback_data": "btn_stop_agent"}
-                ],
-                [
-                    {"text": "📸 Refresh", "callback_data": "btn_chat_refresh"}
-                ]
-            ]
-        }
-
         buf = BytesIO()
         shot.save(buf, format="PNG")
         buf.seek(0)
         
-        # 1. 사진 전송 (기본 정보 + 버튼)
+        # 1. 사진 전송 (기본 정보만 전송, 버튼 제거)
         requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto", 
                       files={'photo': ( 'chat.png', buf, 'image/png')}, 
                       data={
                           'chat_id': int(CHAT_ID), 
                           'caption': photo_caption,
-                          'reply_markup': json.dumps(reply_markup),
                           'parse_mode': 'Markdown'
                       }, 
                       timeout=15)
@@ -591,11 +574,11 @@ def auto_watcher_loop():
 
         # D. 마우스 휠 스크롤 다운 (채팅 따라가기)
         try:
-            sx, sy = int(l + w * 0.85), int(t + h * 0.5)
-            pyautogui.moveTo(sx, sy)
-            pyautogui.scroll(-50)
-            # 스크롤 후 잠깐 대기하여 화면 안정화
-            if not change_notified: time.sleep(0.2)
+            mx, my = pyautogui.position()
+            # 📌 마우스가 VS Code 창 내부, 특히 우측 채팅 영역(70% 이상)에 있을 때만 스크롤 수행
+            if (l + w * 0.7 < mx < r) and (t < my < b):
+                pyautogui.scroll(-20) # 스크롤 양을 약간 줄여 부드럽게 유지
+                if not change_notified: time.sleep(0.1)
         except: pass
 
         # E. 다음 루프를 위한 베이스라인 갱신 (모든 액션 완료 후!!)

@@ -332,29 +332,29 @@ async def cmd_status(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
     await update.message.reply_text(status, parse_mode="Markdown")
 
-async def on_callback_query(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """인라인 버튼 클릭 처리"""
-    query = update.callback_query
-    await query.answer() # 시계 아이콘 제거
-    
-    data = query.data
-    if data == "btn_accept":
-        push_inbound("__COMMAND:ICON:accept_all__")
-        await query.edit_message_caption(caption=f"{query.message.caption}\n\n✅ Accept All 지시 완료")
-    elif data == "btn_proceed":
-        push_inbound("__COMMAND:ICON:proceed__")
-        await query.edit_message_caption(caption=f"{query.message.caption}\n\n➡️ Proceed 지시 완료")
-    elif data == "btn_run":
-        push_inbound("__COMMAND:ICON:run__")
-        await query.edit_message_caption(caption=f"{query.message.caption}\n\n▶️ Run 지시 완료")
-    elif data == "btn_stop_agent":
-        push_inbound("__COMMAND:ICON:stop__")
-        await query.edit_message_caption(caption=f"{query.message.caption}\n\n🛑 Stop 지시 완료")
-    elif data == "btn_chat_refresh":
-        push_inbound("__COMMAND:ICON:chat_refresh_trigger__") # 임시 트리거
-        # cmd_chat 로직을 직접 실행하거나 inbound로 요청
-        from agent_brain import send_chat_snapshot
-        send_chat_snapshot("📸 [Manual] 채팅창 새로고침")
+# async def on_callback_query(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+#     """인라인 버튼 클릭 처리"""
+#     query = update.callback_query
+#     await query.answer() # 시계 아이콘 제거
+#     
+#     data = query.data
+#     if data == "btn_accept":
+#         push_inbound("__COMMAND:ICON:accept_all__")
+#         await query.edit_message_caption(caption=f"{query.message.caption}\n\n✅ Accept All 지시 완료")
+#     elif data == "btn_proceed":
+#         push_inbound("__COMMAND:ICON:proceed__")
+#         await query.edit_message_caption(caption=f"{query.message.caption}\n\n➡️ Proceed 지시 완료")
+#     elif data == "btn_run":
+#         push_inbound("__COMMAND:ICON:run__")
+#         await query.edit_message_caption(caption=f"{query.message.caption}\n\n▶️ Run 지시 완료")
+#     elif data == "btn_stop_agent":
+#         push_inbound("__COMMAND:ICON:stop__")
+#         await query.edit_message_caption(caption=f"{query.message.caption}\n\n🛑 Stop 지시 완료")
+#     elif data == "btn_chat_refresh":
+#         push_inbound("__COMMAND:ICON:chat_refresh_trigger__") # 임시 트리거
+#         # cmd_chat 로직을 직접 실행하거나 inbound로 요청
+#         from agent_brain import send_chat_snapshot
+#         send_chat_snapshot("📸 [Manual] 채팅창 새로고침")
 
 async def on_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not await authorized(update): return
@@ -402,7 +402,7 @@ def main() -> None:
 
     async def post_init(application):
         commands = [
-            BotCommand("auto", "🤖 자동 승인 시작 (아이콘+색상+스크롤+스냅샷)"),
+            BotCommand("auto", "🤖 자동 승인 시작"),
             BotCommand("autooff", "⏹️ 자동 승인 중단"),
             BotCommand("ss", "📸 채팅창 본문 정밀 캡처"),
             BotCommand("ocr", "📖 채팅창 본문 정밀 캡처 + OCR"),
@@ -443,7 +443,7 @@ def main() -> None:
     app.add_handler(CommandHandler("autooff", cmd_autooff))
     app.add_handler(CommandHandler("stop", cmd_stop))
     app.add_handler(CommandHandler("status", cmd_status))
-    app.add_handler(CallbackQueryHandler(on_callback_query))
+    # app.add_handler(CallbackQueryHandler(on_callback_query))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_message))
 
     print("✅ Antigravity Telegram 봇 V3 작동 시작...")
