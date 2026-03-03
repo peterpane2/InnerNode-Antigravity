@@ -518,14 +518,15 @@ def auto_watcher_loop():
         l, t, r, b = rect
         w, h = r - l, b - t
 
-        # A. 아이콘 감시 (모양 인식)
+        # A. 아이콘 감시 (모양 인식) - 윈도우 우측 영역(0.4~1.0)으로 제한하여 에디터 클릭 방지
+        search_region = (int(l + w * 0.4), t, int(w * 0.6), h)
         for icon_name, label, conf in AUTO_ICONS:
             icon_path = os.path.join(ICON_DIR, f"icon_{icon_name}.png")
             if not os.path.exists(icon_path): continue
             now = time.time()
             if now - last_click.get(icon_name, 0) < COOLDOWN: continue
             try:
-                pos = pyautogui.locateCenterOnScreen(icon_path, confidence=conf)
+                pos = pyautogui.locateCenterOnScreen(icon_path, confidence=conf, region=search_region)
                 if pos:
                     pyautogui.moveTo(pos, duration=0.15)
                     pyautogui.click()
@@ -555,10 +556,10 @@ def auto_watcher_loop():
                     change_notified = True
         except: pass
 
-        # C. 색상 기반 승인 버튼 감지
+        # C. 색상 기반 승인 버튼 감지 (에디터를 건드리지 않도록 우측 65% 지점부터 탐색)
         try:
-            zone_l, zone_t = max(0, l + int(w*0.40)), max(0, t + 40)
-            zone_w, zone_h = min(int(w*0.55), pyautogui.size()[0]-zone_l), min(h-100, pyautogui.size()[1]-zone_t)
+            zone_l, zone_t = max(0, l + int(w*0.65)), max(0, t + 40)
+            zone_w, zone_h = min(int(w*0.35), pyautogui.size()[0]-zone_l), min(h-100, pyautogui.size()[1]-zone_t)
             if zone_w > 0 and zone_h > 0:
                 shot = pyautogui.screenshot(region=(zone_l, zone_t, zone_w, zone_h))
                 c_btns = find_color_buttons(shot)
@@ -577,7 +578,7 @@ def auto_watcher_loop():
             mx, my = pyautogui.position()
             # 📌 마우스가 VS Code 창 내부, 특히 우측 채팅 영역(70% 이상)에 있을 때만 스크롤 수행
             if (l + w * 0.7 < mx < r) and (t < my < b):
-                pyautogui.scroll(-20) # 스크롤 양을 약간 줄여 부드럽게 유지
+                pyautogui.scroll(-600) # 한 번에 많이 내려가도록 수치 대폭 상향 (-20 -> -600)
                 if not change_notified: time.sleep(0.1)
         except: pass
 
